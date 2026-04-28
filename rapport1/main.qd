@@ -192,14 +192,14 @@
 # Sources des données
 
 Les données proviennent de deux sites différents. AddBiomechanics dont la mission
-est de faciliter l'accès aux données biomédicales, ainsi que Figshare, une platforme
+est de faciliter l'accès aux données biomédicales, ainsi que Figshare, une plateforme
 de partage de résultats scientifiques.
 
-> Note: Le DOI est un identifiant universel permanant qui permet d'identifier une
-ressource notamment les artciles et datasets scientifiques. Ces donnéées sont quasiment
-toujours accessible à `https://doi.org/ + le DOI`.
+> Note: Le DOI est un identifiant universel permanent qui permet d'identifier une
+ressource notamment les articles et datasets scientifiques. Ces données sont quasiment
+toujours accessibles à `https://doi.org/ + le DOI`.
 
-> Note: et al. signifie et autre en latin. Utilisé notamment dans les articles et
+> Note: et al. signifie et autres en latin. Utilisé notamment dans les articles et
 datasets scientifiques. (ex: Hood et al.)
 
 ## Hood et al.
@@ -208,18 +208,18 @@ datasets scientifiques. (ex: Hood et al.)
 
 ## Werling et al.
 
-Pour ce dataset, les données sont particulière. En fait Keenon Werling c'est la personne
-qui a initié la démarche de rassesmbler des données en dynamique de ligne de charge,
-et qui avait pour but de completer ces datasets avec avec une méthode d'interpolation
-des forces manquantes. Autrement dit lors de certain mouvement comme des saut ou la marche,
-les platforme de mesures de sont pas infinies et ne peuvent pas mesurer en l'air ce qui
-entraine des absences de données.
+Pour ce dataset, les données sont particulières. En fait Keenon Werling c'est la personne
+qui a initié la démarche de rassembler des données en dynamique de ligne de charge,
+et qui avait pour but de compléter ces datasets avec avec une méthode d'interpolation
+des forces manquantes. Autrement dit lors de certains mouvement comme des sauts ou la marche,
+les plateformes de mesures de sont pas infinies et ne peuvent pas mesurer en l'air ce qui
+entraîne des absences de données.
 
-Pour notre utilisation de comparaison, ne devrait pas poser de problème car l'idée c'est de
-comparer les patients sain au patient avec prothèse et pas de réaliser un traitement
+Pour notre utilisation de comparaison, cela ne devrait pas poser de problème car l'idée c'est de
+comparer les patients sains au patient avec prothèse et non de réaliser un traitement
 mécanique précis des patients sains.
 
-Donc dans l'ensemble des ces sous datasets on traitera certainement le dataset
+Donc dans l'ensemble de ces sous datasets on traitera certainement le dataset
 **Carter et al.** qui contient plus de 50 patients et 20h de données, dans un premier temps.
 
 Lien : .text {[https://addbiomechanics.org/download_data.html](https://addbiomechanics.org/download_data.html)} size:{small} style:{italic}
@@ -259,13 +259,15 @@ Lien : .text {[https://addbiomechanics.org/download_data.html](https://addbiomec
   └─ plotshaded.m // Ignorer
   ```
 
+<<<
+
 ## Werling et al. > Carter et al.
 
 .container fontsize:{small} 
   ```
   root/
   ├── Participant_Info.csv // Données des patients
-  ├── FileNaming_Convention.txt // Signification du noms des fichiers dans le zip
+  ├── FileNaming_Convention.txt // Signification du nom des fichiers dans le zip
   ├── MarkerSet_Info.docx // Infos sur le markerset
   ├── P002.zip // Info sur le patient 1
     ├── fichier.c3d
@@ -291,34 +293,32 @@ Lien : .text {[https://addbiomechanics.org/download_data.html](https://addbiomec
 ## Hood et al.
 
 Il y a deux workspace qui sont proposés. Celui Vicon et celui Matlab. Le Vicon
-contient l'ensemble des données de motion capture pour faire un pipeline de biomechanique
-complet. L'autre Matlab contient déjà directemeent les données de lignes de charges.
+contient l'ensemble des données de motion capture pour faire un pipeline de biomécanique
+complet. L'autre Matlab contient déjà directement les données de lignes de charges.
 
-Par conséquent, pour ce dataset nous allons directemenet load les varaibles stockées
+Par conséquent, pour ce dataset nous allons directement load les variables stockées
 dans le workspace Matlab en Python via la
 librairie `scipy.io` => loadmat.
 
-Il existe cependant d'autre librairies si besoin. Il faudra d'abord donc vérifier que
-l'on peut bien loader les données et quelles sont correctement structuré. Donc pas
-besoin pour le moment de pipeline biomécanique pour ce dataset, quoi que possible
+Il existe cependant d'autres librairies si besoin. Il faudra d'abord donc vérifier que
+l'on peut bien loader les données et qu'elles sont correctement structurées. Donc pas
+besoin pour le moment de pipeline biomécanique pour ce dataset, quoique possible
 car il existe une librairie Python pour traiter les fichiers du workspace Vicon.
 
 ## Werling et al. > Carter et al.
 
-Pour ce dataset, les données ne sont pas près traitées donc il faut faire un pipeline
-complet de biomécanique. Traitement à priori possible avec ezc3d en python.
+Pour ce dataset, les données ne sont pas pré traitées donc il faut faire un pipeline
+complet de biomécanique. Traitement a priori possible avec ezc3d en python.
 
 ## Bilan
 
-Vicon a dicidé d'utiliser c3d comme format de fichier, du coup les
-librairie comme ezc3d est fait pour traiter ce format. Donc au fait au final,
-les fichiers c3d stocke l'historique de la position de tous les markers. Donc en fait
+Vicon a décidé d'utiliser c3d comme format de fichier, du coup les
+librairies comme ezc3d est fait pour traiter ce format. Donc au fait au final,
+les fichiers c3d stockent l'historique de la position de tous les markers. Donc en fait
 on peut les charger dans des tableaux np avec la librairie.
 
-Donc peut être juste faire un pipeline de calcul de ligne de charge et l'appliquer
+Donc peut-être juste faire un pipeline de calcul de ligne de charge et l'appliquer
 sur les deux datasets pour avoir des données comparables.
-
-# Premier chargement
 
 # Conclusion
 
