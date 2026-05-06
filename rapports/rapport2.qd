@@ -1,0 +1,330 @@
+.docname {Livrable 1}
+.doctype {paged}
+.doclang {French}
+.theme {paperwhite} layout:{minimal}
+
+.docauthors
+  - Matthieu Damien
+  - Florian Alzaix
+
+<!--  Var -->
+
+.var {teachers}
+    - Maria Alice Bertolim
+
+.var {refs}
+    - Laurine Calistri
+    - Maïalen Matray
+
+.var {MARGIN} {1.5cm}
+
+.var {TITLE} {Livrable 1}
+
+.var {CODEHEADERCOLOR} {rgb(85, 141, 12)}
+
+<!--
+
+  Setup
+
+-->
+
+.noautopagebreak
+
+.pagemargin {bottomcenter}
+  .currentpage / .totalpages
+
+.numbering
+  - headings: 1.1.a
+  - figures: 1.1
+
+.pageformat size:{a4} margin:{.MARGIN}
+
+.pagemargin {bottomright}
+  .text {2024-2025} size:{small}
+
+.pagemargin {bottomleft}
+  .row gap:{10}
+    .foreach {.docauthors}
+      name info:
+        .text {.name} size:{small}
+
+<!--
+
+  Functions
+
+-->
+
+.function {logo}
+  .container alignment:{start} foreground:{rgba(0, 0, 0, 0)}
+    !(35%)[ESEO](images/logo.png) T
+
+.function {space}
+  width:
+  .container foreground:{rgba(0, 0, 0, 0)}
+    .column
+      .repeat {.width}
+        T
+
+.function {fig}
+    link caption? img:
+    .container fullwidth:{yes}
+      .row
+        .html {<div id=".link"></div>}
+      .img
+      .ifnot {.caption::isnone}
+          .container fullwidth:{true} margin:{-35 0 0 0}
+            .mermaid caption:{.caption}
+                flowchart TD
+
+.function {codeheader}
+  code:
+      .column gap:{0} cross:{stretch}
+        .container fullwidth:{yes} background:{.CODEHEADERCOLOR} padding:{5 0 0 15} foreground:{white} radius:{11 4 0 0}
+          .text {Code} {small} weight:{bold}
+        .container fullwidth:{yes} alignment:{center} textalignment:{center} border:{.CODEHEADERCOLOR} padding:{10} radius:{0 0 11 4}
+          .code
+
+.function {tab}
+    caption? headers rows:
+    .html {<table>}
+    .html {<thead>}
+    .html {<tr>}
+    .foreach {.headers}
+        h:
+        .html {<th>.h</th>}
+    .html {</tr>}
+    .html {</thead>}
+    .html {<tbody>}
+    .foreach {.rows}
+        r:
+        .html {<tr>}
+        .foreach {.r}
+            c:
+            .html {<td>.c</td>}
+        .html {</tr>}
+    .html {</tbody>}
+    .html {</table>}
+    .container fullwidth:{true} alignment:{center} margin:{-165 0 0 0}
+        .row alignment:{center}
+            .ifnot {.caption::isnone}
+                .mermaid caption:{.caption}
+                    flowchart
+
+.function {twocolslist}
+    elts:
+    .let {.if {.elts::size::rem {2}::equals {0}} {@lambda .elts::size::divide {2}} .ifnot {.elts::size::rem {2}::equals {0}} {@lambda .elts::size::divide {2}::sum {1}}}
+        half:
+        .container fullwidth:{true} margin:{-15 0 0 0}
+            .row alignment:{spaceevenly} cross:{start}
+                .column cross:{start}
+                    .foreach {.range {1} {.half}}
+                        i:
+                        .container margin:{0 0 10 0}
+                            * .elts::getat {.i}
+
+
+
+                .column cross:{start}
+                    .foreach {.range {.half} {.elts::size::subtract {1}}}
+                        i:
+                        .container margin:{0 0 10 0}
+                            * .elts::getat {.i::sum {1}}
+
+.function {displaylistoffigures}
+    x:
+    .container
+        .foreach {.range {1} {.x::size}}
+            i:
+            .let {.x::getat {.i}}
+                e:
+                .container classname:{figures-row}
+                    .i.
+
+                    .text {.e::last} url:{#.e::first}
+
+.function {displayglossary}
+    list:
+    .foreach {.list}
+        def:
+        .container classname:{figures-row smalltext}
+            .html {<div id=".ifnot {.def::first::equals {Open source}} {.def::first}.if {.def::first::equals {Open source}} {opensource}"></div>}
+
+            **.def::first** : .def::last
+
+
+<<<
+
+.logo
+
+.container alignment:{center} fullwidth:{yes} height:{20cm}
+    .column alignment:{center}
+        .text {Projet de synthèse :} size:{huge} style:{italic}
+        .text {Livrable 1} size:{huge} weight:{bold}
+        .space {3}
+        .grid columns:{3} cross:{start} gap:{2cm}
+            .column cross:{start} gap:{10px}
+                .text {Enseignants :} size:{medium} weight:{bold} style:{italic}
+                .container
+                    .foreach {.teachers}
+                        name:
+                            - .name
+
+            .column cross:{start}
+                .text {Eleves :} size:{medium} weight:{bold} style:{italic}
+                .container
+                    .foreach {.docauthors}
+                        name info:
+                            - .name
+
+            .column cross:{start}
+                .text {Référentes :} size:{medium} weight:{bold} style:{italic}
+                .container
+                    .foreach {.refs}
+                        name:
+                            - .name
+
+<<<
+
+.tableofcontents
+
+<<<
+
+# Sources des données
+
+Les données proviennent de deux sites différents. AddBiomechanics dont la mission
+est de faciliter l'accès aux données biomédicales, ainsi que Figshare, une plateforme
+de partage de résultats scientifiques.
+
+> Note: Le DOI est un identifiant universel permanent qui permet d'identifier une
+ressource notamment les articles et datasets scientifiques. Ces données sont quasiment
+toujours accessibles à `https://doi.org/ + le DOI`.
+
+> Note: et al. signifie et autres en latin. Utilisé notamment dans les articles et
+datasets scientifiques. (ex: Hood et al.)
+
+## Hood et al.
+
+.text {[https://springernature.figshare.com/articles/dataset/Lower_Limb_Kinetic_and_Kinematic_Data_of_18_Above_Knee_Amputees/10308443?backTo=/collections/Lower_Limb_Kinetic_and_Kinematic_Data_of_18_Above_Knee_Amputees/4962305](https://doi.org/10.6084/m9.figshare.c.4962305)} size:{small} style:{italic}
+
+## Werling et al.
+
+Pour ce dataset, les données sont particulières. En fait Keenon Werling c'est la personne
+qui a initié la démarche de rassembler des données en dynamique de ligne de charge,
+et qui avait pour but de compléter ces datasets avec avec une méthode d'interpolation
+des forces manquantes. Autrement dit lors de certains mouvement comme des sauts ou la marche,
+les plateformes de mesures de sont pas infinies et ne peuvent pas mesurer en l'air ce qui
+entraîne des absences de données.
+
+Pour notre utilisation de comparaison, cela ne devrait pas poser de problème car l'idée c'est de
+comparer les patients sains au patient avec prothèse et non de réaliser un traitement
+mécanique précis des patients sains.
+
+Donc dans l'ensemble de ces sous datasets on traitera certainement le dataset
+**Carter et al.** qui contient plus de 50 patients et 20h de données, dans un premier temps.
+
+Lien : .text {[https://addbiomechanics.org/download_data.html](https://addbiomechanics.org/download_data.html)} size:{small} style:{italic}
+
+# Structure des fichiers
+
+## Hood et al.
+
+.container fontsize:{small}
+  ```
+  root/
+  ├─ TF01.zip // Patient 1
+    ├─ vicon_workspace
+    └─ matlab_workspace
+  ├─ TF02.zip // Patient 2
+  ├─ TF05.zip // Patient 3
+  ├─ TF06.zip // ...
+  ├─ TF07.zip
+  ├─ TF08.zip
+  ├─ TF09.zip
+  ├─ TF10.zip
+  ├─ TF11.zip
+  ├─ TF12.zip
+  ├─ TF13.zip
+  ├─ TF14.zip
+  ├─ TF15.zip
+  ├─ TF16.zip
+  ├─ TF17.zip
+  ├─ TF18.zip
+  ├─ TF19.zip
+  ├─ TF20.zip
+  ├─ Subject Information.xlsx // Liste des patients avec les détails
+  ├─ READ ME Springer Nature.docx
+  ├─ example_plotting_script.m // Ignorer
+  ├─ plot_eachspeed_comp_sides.m // Ignorer
+  ├─ plot_allspeeds_pos_comp_sides.m // Ignorer
+  └─ plotshaded.m // Ignorer
+  ```
+
+<<<
+
+## Werling et al. > Carter et al.
+
+.container fontsize:{small}
+  ```
+  root/
+  ├── Participant_Info.csv // Données des patients
+  ├── FileNaming_Convention.txt // Signification du nom des fichiers dans le zip
+  ├── MarkerSet_Info.docx // Infos sur le markerset
+  ├── P002.zip // Info sur le patient 1
+    ├── fichier.c3d
+    ├── fichier.c3d
+    └── ...
+  ├── P003.zip // Info sur le patient 2
+  ├── P004.zip // ...
+  ├── P006.zip
+  ├── P007.zip
+  ├── P008.zip
+  ├── P009.zip
+  ├── P010.zip
+  ├── P011.zip
+  ├── P012.zip
+  ├── P013.zip
+  ├── P014.zip
+  ├── ...
+  └── P050.zip
+  ```
+
+# Méthode de travail
+
+## Hood et al.
+
+Il y a deux workspace qui sont proposés. Celui Vicon et celui Matlab. Le Vicon
+contient l'ensemble des données de motion capture pour faire un pipeline de biomécanique
+complet. L'autre Matlab contient déjà directement les données de lignes de charges.
+
+Par conséquent, pour ce dataset nous allons directement load les variables stockées
+dans le workspace Matlab en Python via la
+librairie `scipy.io` => loadmat.
+
+Il existe cependant d'autres librairies si besoin. Il faudra d'abord donc vérifier que
+l'on peut bien loader les données et qu'elles sont correctement structurées. Donc pas
+besoin pour le moment de pipeline biomécanique pour ce dataset, quoique possible
+car il existe une librairie Python pour traiter les fichiers du workspace Vicon.
+
+## Werling et al. > Carter et al.
+
+Pour ce dataset, les données ne sont pas pré traitées donc il faut faire un pipeline
+complet de biomécanique. Traitement a priori possible avec ezc3d en python.
+
+## Bilan
+
+Vicon a décidé d'utiliser c3d comme format de fichier, du coup les
+librairies comme ezc3d est fait pour traiter ce format. Donc au fait au final,
+les fichiers c3d stockent l'historique de la position de tous les markers. Donc en fait
+on peut les charger dans des tableaux np avec la librairie.
+
+Donc peut-être juste faire un pipeline de calcul de ligne de charge et l'appliquer
+sur les deux datasets pour avoir des données comparables.
+
+# Conclusion
+
+On doit comprendre le format c3d, prendre en main la librairie ezc3d, familiarisation
+de la biomécanique pour pouvoir déterminer le centre de précision du pied ciblé du patient
+ainsi que la ligne de charge.
+
+Il faut aussi prendre en compte dans les données patient quel côté traiter en fonction de
+la pathologie et déterminer si le côté droit est comparable au côté gauche.
