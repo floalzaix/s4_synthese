@@ -1,0 +1,5 @@
+family,n_features,n_train,n_test,accuracy,f1_weighted,roc_auc
+temporal_only,6,123,42,0.5476,0.5458,0.6181
+asymmetry_only,6,123,42,0.6667,0.6587,0.7523
+combined,12,123,42,0.7143,0.7074,0.7616
+all_features,20,123,42,0.619,0.6021,0.7257
