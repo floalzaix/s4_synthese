@@ -1,3 +1,18 @@
-**/venv/
+# Environnements
+**/.venv/
+
+# Dossiers générés
 **/quarkdown-output/
+**/docs/
 **/datasets/
+
+# Pycache et modules compilés
+project/__pycache__/
+__pycache__/
+*.pyc
+*~
+
+# Traces de compilation
+*.so
+*.o
+*.class
