@@ -1,0 +1,7 @@
+subject_id,study,group,n_steps_L,n_steps_R,mean_int_L,std_int_L,quality_L,quality_R,short_ratio_L,long_ratio_L
+GaPt03,Ga,PD,78,80,1.558,0.159,good,good,0.0,0.026
+JuPt01,Ju,PD,73,73,1.121,0.096,good,good,0.0,0.0
+SiPt02,Si,PD,109,109,1.117,0.047,good,good,0.0,0.0
+GaCo01,Ga,CO,96,98,1.262,0.147,good,good,0.0,0.011
+JuCo01,Ju,CO,45,45,1.192,0.058,good,good,0.0,0.0
+SiCo01,Si,CO,95,95,1.277,0.091,good,good,0.0,0.0

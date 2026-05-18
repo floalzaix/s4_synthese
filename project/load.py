@@ -1,12 +1,33 @@
 """
-Chargement du dataset PhysioNet « Gait in Parkinson's Disease v1.0.0 ».
+[ROLE]
+Ce fichier contient les fonctions de chargement et de normalisation du dataset PhysioNet « Gait in Parkinson's Disease v1.0.0 ».
 
-Anomalies documentées (non corrigées dans les données brutes) :
-- Juc010 : entrée présente dans demographics.xls mais aucun fichier signal
-  correspondant n'existe sur le disque. filepath=None dans l'index.
-- Height (meters) : la colonne contient des valeurs en cm pour l'étude Ju
-  (160–185) et en mètres pour Ga/Si (1.50–1.95). La colonne `height_m` du
-  DataFrame retourné par load_demographics() applique la correction explicite.
+[RESPONSIBILITY]
+- Charger les données démographiques depuis demographics.xls.
+- Référencer les fichiers de signaux bruts.
+- Construire un index complet fusionnant métadonnées et chemins de fichiers.
+- Lire les fichiers de signaux individuels.
+
+[INPUTS]
+- Fichier demographics.xls (Excel).
+- Fichiers .txt de signaux (TSV).
+
+[OUTPUTS]
+- DataFrame pandas indexé.
+- DataFrame pandas des signaux bruts.
+
+[ASSUMPTIONS]
+- Le dataset est structuré selon le format standard PhysioNet.
+- Fréquence d'échantillonnage de 100 Hz.
+
+[RISKS]
+- Dépendance à xlrd pour la lecture Excel.
+- Variabilité des noms de colonnes dans les futures versions du dataset.
+
+[DEPENDENCIES]
+- pandas
+- pathlib
+- re
 """
 
 from __future__ import annotations
@@ -26,6 +47,11 @@ _DEFAULT_DATASET_NAME = "gait-in-parkinsons-disease-1.0.0"
 
 
 def _resolve_root(root_dir: Optional[str | Path] = None) -> Path:
+    """
+    @brief Résout le chemin racine du dataset.
+    @param root_dir Chemin optionnel vers la racine du dataset.
+    @return Path Chemin résolu.
+    """
     if root_dir is not None:
         return Path(root_dir)
     # Remonte de project/ vers la racine du dépôt, puis datasets/
@@ -41,13 +67,16 @@ def _resolve_root(root_dir: Optional[str | Path] = None) -> Path:
 
 def load_demographics(root_dir: Optional[str | Path] = None) -> pd.DataFrame:
     """
-    Lit demographics.xls et retourne un DataFrame propre, indexé sur ID.
+    @brief Lit demographics.xls et retourne un DataFrame propre, indexé sur ID.
 
     Colonnes ajoutées :
       height_m  — hauteur en mètres pour tous les sujets (corrige l'incohérence
                   d'unité pour l'étude Ju dont les valeurs originales sont en cm).
 
     Toutes les colonnes originales de demographics.xls sont conservées.
+
+    @param root_dir Chemin optionnel vers la racine du dataset.
+    @return pd.DataFrame Données démographiques nettoyées.
     """
     root = _resolve_root(root_dir)
     xls_path = root / "demographics.xls"
@@ -88,6 +117,11 @@ _WALK_TYPE_MAP = {
 
 
 def _session_to_walk_type(session: str) -> str:
+    """
+    @brief Mappe une session vers un type de marche.
+    @param session Identifiant de la session.
+    @return str Nom du type de marche.
+    """
     if session in _WALK_TYPE_MAP:
         return _WALK_TYPE_MAP[session]
     try:
@@ -101,7 +135,7 @@ def _session_to_walk_type(session: str) -> str:
 
 def list_signal_files(root_dir: Optional[str | Path] = None) -> list[dict]:
     """
-    Parcourt le dossier dataset et retourne la liste des fichiers signal.
+    @brief Parcourt le dossier dataset et retourne la liste des fichiers signal.
 
     Chaque entrée est un dict :
       subject_id  — ex. "GaPt03"
@@ -111,6 +145,9 @@ def list_signal_files(root_dir: Optional[str | Path] = None) -> list[dict]:
 
     Les fichiers non-signal (demographics.txt, format.txt, SHA256SUMS.txt)
     sont ignorés.
+
+    @param root_dir Chemin optionnel vers la racine du dataset.
+    @return list[dict] Liste des métadonnées des fichiers de signaux.
     """
     root = _resolve_root(root_dir)
     if not root.exists():
@@ -164,10 +201,9 @@ _SIGNAL_COLUMNS = [
 
 def load_signal_file(filepath: str | Path) -> pd.DataFrame:
     """
-    Lit un fichier signal .txt (TSV sans en-tête, 19 colonnes, 100 Hz).
-
-    Retourne un DataFrame avec les colonnes :
-      time, L1–L8, R1–R8, total_L, total_R
+    @brief Lit un fichier signal .txt (TSV sans en-tête, 19 colonnes, 100 Hz).
+    @param filepath Chemin du fichier à charger.
+    @return pd.DataFrame Signaux temporels.
     """
     df = pd.read_csv(
         filepath,
@@ -186,7 +222,7 @@ def load_signal_file(filepath: str | Path) -> pd.DataFrame:
 
 def load_dataset_index(root_dir: Optional[str | Path] = None) -> pd.DataFrame:
     """
-    Retourne une table complète (sujet × session) avec métadonnées.
+    @brief Retourne une table complète (sujet × session) avec métadonnées.
 
     Colonnes garanties :
       subject_id, session, walk_type, filepath  — depuis les fichiers signal
@@ -196,8 +232,10 @@ def load_dataset_index(root_dir: Optional[str | Path] = None) -> pd.DataFrame:
     Une ligne par (sujet, session). Le sujet Juc010 (dans demographics mais sans
     fichier signal) apparaît avec filepath=None.
 
-    Sujets présents dans les fichiers mais absents de demographics sont exclus
-    (aucun cas connu dans cette version du dataset).
+    Sujets présents dans les fichiers mais absents de demographics sont exclus.
+
+    @param root_dir Chemin optionnel vers la racine du dataset.
+    @return pd.DataFrame Index complet du dataset.
     """
     demo = load_demographics(root_dir)
     signals = list_signal_files(root_dir)

@@ -1,0 +1,20 @@
+feature,importance,direction,biomechanical_interest
+std_asym,0.1137,Diminué (PD < CO),Reflète la perte de symétrie bilatérale caractéristique du Parkinson.
+asym_swing,0.1101,Augmenté (PD > CO),Reflète la perte de symétrie bilatérale caractéristique du Parkinson.
+asym_stance,0.0773,Augmenté (PD > CO),Reflète la perte de symétrie bilatérale caractéristique du Parkinson.
+cv_swing_R,0.0768,Augmenté (PD > CO),Indique une instabilité ou irrégularité accrue du cycle de marche.
+mean_asym,0.0602,Augmenté (PD > CO),Reflète la perte de symétrie bilatérale caractéristique du Parkinson.
+cv_swing_L,0.0569,Augmenté (PD > CO),Indique une instabilité ou irrégularité accrue du cycle de marche.
+mean_stance_R,0.0471,Augmenté (PD > CO),"Traduit le temps passé en appui, souvent allongé chez les PD (prudence)."
+cv_stance_L,0.0466,Augmenté (PD > CO),Indique une instabilité ou irrégularité accrue du cycle de marche.
+mean_swing_R,0.043,Diminué (PD < CO),"Reflète la phase dynamique, souvent plus variable chez les patients."
+cv_stance_R,0.0424,Augmenté (PD > CO),Indique une instabilité ou irrégularité accrue du cycle de marche.
+asym_auc_steps,0.0423,Augmenté (PD > CO),Reflète la perte de symétrie bilatérale caractéristique du Parkinson.
+mean_abs_diff,0.0387,Diminué (PD < CO),Reflète la perte de symétrie bilatérale caractéristique du Parkinson.
+diff_auc,0.038,Augmenté (PD > CO),Reflète la perte de symétrie bilatérale caractéristique du Parkinson.
+n_steps_R_seg,0.0358,Augmenté (PD > CO),Lié à la vitesse de marche et à la stratégie globale de déplacement.
+cv_interval_L,0.0356,Augmenté (PD > CO),Indique une instabilité ou irrégularité accrue du cycle de marche.
+n_steps,0.0355,Augmenté (PD > CO),Lié à la vitesse de marche et à la stratégie globale de déplacement.
+n_steps_L_seg,0.0345,Augmenté (PD > CO),Lié à la vitesse de marche et à la stratégie globale de déplacement.
+mean_swing_L,0.0343,Diminué (PD < CO),"Reflète la phase dynamique, souvent plus variable chez les patients."
+mean_stance_L,0.0313,Augmenté (PD > CO),"Traduit le temps passé en appui, souvent allongé chez les PD (prudence)."
