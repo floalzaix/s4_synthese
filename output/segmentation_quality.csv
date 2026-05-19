@@ -1,5 +1,5 @@
-study,total_subjects,mean_steps_L,mean_steps_R,invalid_count,invalid_ratio
-Ga,47,108.6,109.2,0,0.0
-Ju,54,84.1,84.2,0,0.0
-Si,64,109.2,109.1,0,0.0
-GLOBAL,165,100.8,101.0,0,0.0
+sid,n_L,n_R,status
+GaPt03,78,80,OK
+JuPt01,73,73,OK
+SiPt02,109,109,OK
+GaCo01,96,98,OK

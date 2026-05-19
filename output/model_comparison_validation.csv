@@ -1,4 +1,0 @@
-feature_set,n_features,acc_mean,f1_mean,auc_mean
-parsimonious,6,0.7394,0.7385,0.7914
-combined,12,0.7273,0.7248,0.7678
-all_features,33,0.7576,0.7557,0.7973

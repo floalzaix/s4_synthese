@@ -1,4 +1,0 @@
-model_name,n_features,accuracy,f1_weighted,roc_auc
-RandomForest,6,0.7381,0.7339,0.7917
-LogisticRegression,6,0.619,0.6021,0.7569
-MLPClassifier,6,0.6667,0.6519,0.7708
