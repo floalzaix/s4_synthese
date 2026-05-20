@@ -3,9 +3,11 @@
 #
 
 import os
+from typing import Any
 import pandas as p # type: ignore
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 from scipy.interpolate import Rbf # type: ignore
 
@@ -17,15 +19,16 @@ INPUT_PATH = "datasets/gait-in-parkinsons-disease-1.0.0/"
 OUTPUT_PATH = "datasets/gait-in-parkinsons-disease-1.0.0/preprocessed/"
 
 # TODO: Determine which size is the most appropriate
-HM_W = 32
-HM_H = 32
+# Often used sizes are 224x224 for pretrained models
+HM_W = 224
+HM_H = 224
 
 # TODO: See if we keep only the patient with _01 at the end or _02 for now no just keeping the _01
 
 # The padding around the footprints and the radius of the points
 # TODO : Determine the best padding and radius
-HEATMAP_PADDING = 11 / 2
-POINT_RADIUS = 10 / 2
+HEATMAP_PADDING = 12 * 224 / 64 # Because it the 11 is from the original 64x64 heatmap
+POINT_RADIUS = 8.5 * 224 / 64 # Because it the 9 is from the original 64x64 heatmap
 
 SENSOR_XY = np.array([
     [-500, -800],
@@ -45,6 +48,10 @@ SENSOR_XY = np.array([
     [300, 400],
     [500, 800],
 ])
+
+FPS = 100
+TIME_TO_KEEP = 30 # seconds
+LOG_INTERVAL = 9.99 # seconds
 
 #
 #   Cleaning the metadata
@@ -114,18 +121,29 @@ x, y = SENSOR_XY[:, 0], SENSOR_XY[:, 1]
 x = normalize(x) * (HM_W - 1 - 2 * HEATMAP_PADDING) + HEATMAP_PADDING
 y = normalize(y) * (HM_H - 1 - 2 * HEATMAP_PADDING) + HEATMAP_PADDING
 
-# Preparing the heatmaps for each patient
-for patient in demo["ID"]:
+blanck_column = np.zeros((HM_H, HM_W))
 
+# Preparing the heatmaps for each patient
+for i, patient in enumerate(demo["ID"]):
+    print(f"Processing patient {i + 1} / {len(demo['ID'])}")
+    
     # Loading the patient grf file
     patient_path = INPUT_PATH + patient + "_01.txt"
     if os.path.isfile(patient_path):
         with open(patient_path, "r") as file:
 
             # Creating a heatmap for each line
-            heatmaps = []
+            heatmaps: Any = []
+            time_stamp = time.time()
+            n = 0 # Number of logs printed
+            i = 0 # Index of the heatmap
             weight = demo[demo["ID"] == patient]["Weight (kg)"].values[0]
             for line in file:
+
+                # Keeping the heatmaps for the last TIME_TO_KEEP seconds                
+                if len(heatmaps) >= TIME_TO_KEEP * FPS:
+                    break
+
                 splits = line.strip("\n").split("\t")
                 if len(splits) != 19:
                     continue
@@ -148,11 +166,38 @@ for patient in demo["ID"]:
                 # Giving the shape (C, H, W)
                 # C = 1 because we have only one channel, intensity
                 # and reversing H because of the different referentials
-                heatmaps.append(heatmap[np.newaxis, ::-1, :])
+                # and then duplicating the canals for compatibility purposes to
+                # standard pre trained models => C = 3
+                heatmap = heatmap[::-1, :] # Reversing the vertical axis
+                heatmap = np.stack([heatmap, blanck_column, blanck_column], axis=0)
+                heatmap = (heatmap).astype(np.uint16) # Converting to uint8 0-255
+                heatmaps.append(heatmap)
+                
+                i += 1
 
-            heatmaps = np.array(heatmaps, dtype=np.float16) # Shape : (T, 1, H, W)
+                if time.time() - time_stamp >= LOG_INTERVAL * n:
+                    n += 1
+                    print(
+                        f" -> Processed {i} heatmaps in {time.time() - time_stamp:.2f} "
+                        "seconds !"
+                    )
+
+            heatmaps = np.array(heatmaps) # Shape : (T, 3, H, W)
             
+            # Saving the heatmaps
+            print(
+                "\n"
+                "=================================================\n"
+                f" => Saving heatmaps for patient {patient} in "
+                f"{time.time() - time_stamp:.2f} seconds !"
+            )
+            time_stamp = time.time()
             np.savez_compressed(OUTPUT_PATH + patient + "_hm.npz", heatmaps=heatmaps)
+            print(
+                f" => Saved heatmaps for patient {patient} in "
+                f"{time.time() - time_stamp:.2f} seconds !\n"
+                "=================================================\n"
+            )
 
     else:
         print(f"No file found for patient {patient} !")

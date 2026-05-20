@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 PATH = "datasets/gait-in-parkinsons-disease-1.0.0/preprocessed/GaPt05_hm.npz"
 OUTPUT_PATH = "test.mp4"
 
-FPS = 50
+FPS = 100
 
 #
 #   Main
@@ -30,10 +30,11 @@ w, h = hm.shape[2], hm.shape[1]
 cmap = plt.get_cmap("hsv")
 
 # Normalising the data to uint8 0-255
-hm = hm.astype(np.float32)
+hm = hm.astype(np.float16)
 
 hm -= hm.min()
 hm /= hm.max()
+hm *= 0.85 # To prevent looping from the cmap
 
 fourcc = cv.VideoWriter_fourcc(*"mp4v")
 out = cv.VideoWriter(OUTPUT_PATH, fourcc, FPS, (w, h))
