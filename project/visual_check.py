@@ -10,6 +10,12 @@ Contrôle Qualité (QC) visuel de la segmentation par pas.
 - output/figures/segmentation/*.png
 """
 
+##
+# @file visual_check.py
+# @brief Contrôle Qualité (QC) visuel de la segmentation par pas.
+# @details Génère des atlas visuels pour vérifier la détection des phases d'appui et d'oscillation.
+#
+
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
@@ -25,7 +31,11 @@ setup_style()
 
 
 def plot_segmentation_atlas(sig: pd.DataFrame, sid: str):
-    """@brief Génère une vue atlas pour un sujet."""
+    """
+    @brief Génère une vue atlas pour un sujet.
+    @param sig DataFrame des signaux temporels.
+    @param sid Identifiant du sujet.
+    """
     time = sig["time"].values
     L, R = sig["total_L"].values, sig["total_R"].values
     seg_L = segment_steps(L)
@@ -79,6 +89,9 @@ def plot_segmentation_atlas(sig: pd.DataFrame, sid: str):
 
 
 def main():
+    """
+    @brief Exécute le processus de QC visuel sur une sélection de sujets.
+    """
     print(f"--- Optimisation QC Segmentation - Session: {SESSION} ---")
     idx = load_dataset_index()
     targets = ["GaPt03", "JuPt01", "SiPt02", "GaCo01"]

@@ -1,34 +1,8 @@
-"""
-[ROLE]
-Ce fichier contient les fonctions de chargement et de normalisation du dataset PhysioNet « Gait in Parkinson's Disease v1.0.0 ».
-
-[RESPONSIBILITY]
-- Charger les données démographiques depuis demographics.xls.
-- Référencer les fichiers de signaux bruts.
-- Construire un index complet fusionnant métadonnées et chemins de fichiers.
-- Lire les fichiers de signaux individuels.
-
-[INPUTS]
-- Fichier demographics.xls (Excel).
-- Fichiers .txt de signaux (TSV).
-
-[OUTPUTS]
-- DataFrame pandas indexé.
-- DataFrame pandas des signaux bruts.
-
-[ASSUMPTIONS]
-- Le dataset est structuré selon le format standard PhysioNet.
-- Fréquence d'échantillonnage de 100 Hz.
-
-[RISKS]
-- Dépendance à xlrd pour la lecture Excel.
-- Variabilité des noms de colonnes dans les futures versions du dataset.
-
-[DEPENDENCIES]
-- pandas
-- pathlib
-- re
-"""
+##
+# @file load.py
+# @brief Fonctions de chargement et de normalisation du dataset PhysioNet « Gait in Parkinson's Disease v1.0.0 ».
+# @details Gère les données démographiques (.xls) et les signaux temporels (.txt).
+#
 
 from __future__ import annotations
 
@@ -68,13 +42,7 @@ def _resolve_root(root_dir: Optional[str | Path] = None) -> Path:
 def load_demographics(root_dir: Optional[str | Path] = None) -> pd.DataFrame:
     """
     @brief Lit demographics.xls et retourne un DataFrame propre, indexé sur ID.
-
-    Colonnes ajoutées :
-      height_m  — hauteur en mètres pour tous les sujets (corrige l'incohérence
-                  d'unité pour l'étude Ju dont les valeurs originales sont en cm).
-
-    Toutes les colonnes originales de demographics.xls sont conservées.
-
+    @details Normalise la hauteur en mètres pour tous les sujets.
     @param root_dir Chemin optionnel vers la racine du dataset.
     @return pd.DataFrame Données démographiques nettoyées.
     """
@@ -136,16 +104,7 @@ def _session_to_walk_type(session: str) -> str:
 def list_signal_files(root_dir: Optional[str | Path] = None) -> list[dict]:
     """
     @brief Parcourt le dossier dataset et retourne la liste des fichiers signal.
-
-    Chaque entrée est un dict :
-      subject_id  — ex. "GaPt03"
-      session     — ex. "01"
-      walk_type   — "normal" | "normal_2" | "ras_N" | "dual_task" | "unknown_N"
-      filepath    — chemin absolu (Path)
-
-    Les fichiers non-signal (demographics.txt, format.txt, SHA256SUMS.txt)
-    sont ignorés.
-
+    @details Filtre les fichiers non-signal et extrait l'ID sujet et le type de session.
     @param root_dir Chemin optionnel vers la racine du dataset.
     @return list[dict] Liste des métadonnées des fichiers de signaux.
     """
@@ -223,17 +182,7 @@ def load_signal_file(filepath: str | Path) -> pd.DataFrame:
 def load_dataset_index(root_dir: Optional[str | Path] = None) -> pd.DataFrame:
     """
     @brief Retourne une table complète (sujet × session) avec métadonnées.
-
-    Colonnes garanties :
-      subject_id, session, walk_type, filepath  — depuis les fichiers signal
-      study, group, + toutes les colonnes de demographics  — depuis demographics.xls
-      height_m  — hauteur normalisée en mètres
-
-    Une ligne par (sujet, session). Le sujet Juc010 (dans demographics mais sans
-    fichier signal) apparaît avec filepath=None.
-
-    Sujets présents dans les fichiers mais absents de demographics sont exclus.
-
+    @details Fusionne les données démographiques et les chemins de fichiers.
     @param root_dir Chemin optionnel vers la racine du dataset.
     @return pd.DataFrame Index complet du dataset.
     """
@@ -286,52 +235,3 @@ def load_dataset_index(root_dir: Optional[str | Path] = None) -> pd.DataFrame:
     index = index[priority + remaining]
 
     return index.reset_index(drop=True)
-
-
-# ---------------------------------------------------------------------------
-# Exemple d'utilisation (exécutable directement)
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    print("=== load_demographics() ===")
-    demo = load_demographics()
-    print(f"  {len(demo)} sujets, {len(demo.columns)} colonnes")
-    print(f"  Colonnes : {list(demo.columns)}")
-    print(
-        f"  PD : {(demo['Group'] == 'PD').sum()}, CO : {(demo['Group'] == 'CO').sum()}"
-    )
-    print(f"  HoehnYahr manquant : {demo['HoehnYahr'].isna().sum()}")
-    print(f"  UPDRS manquant     : {demo['UPDRS'].isna().sum()}")
-    print(f"  UPDRSM manquant    : {demo['UPDRSM'].isna().sum()}")
-    print()
-
-    print("=== list_signal_files() ===")
-    files = list_signal_files()
-    print(f"  {len(files)} fichiers signal")
-    by_study = {}
-    for f in files:
-        s = f["subject_id"][:2]
-        by_study[s] = by_study.get(s, 0) + 1
-    print(f"  Par étude : {by_study}")
-    print()
-
-    print("=== load_signal_file() — exemple GaCo01_01.txt ===")
-    import pathlib
-
-    root = _resolve_root()
-    sig = load_signal_file(root / "GaCo01_01.txt")
-    print(f"  Shape : {sig.shape}")
-    print(f"  Durée : {sig['time'].max():.1f} s  ({len(sig)} échantillons @ 100 Hz)")
-    print(f"  Colonnes : {list(sig.columns)}")
-    print()
-
-    print("=== load_dataset_index() ===")
-    idx = load_dataset_index()
-    print(f"  {len(idx)} lignes (sujets × sessions)")
-    print(
-        f"  Sans fichier signal (filepath=NaN) : "
-        f"{idx['filepath'].isna().sum()} sujet(s)"
-    )
-    print(
-        f"  Aperçu :\n{idx[['subject_id', 'session', 'walk_type', 'Group', 'HoehnYahr']].head(8).to_string(index=False)}"
-    )

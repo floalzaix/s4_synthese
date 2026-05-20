@@ -1,8 +1,15 @@
 """
 [ROLE]
-Ce fichier initialise le package project.
+Fichier d'initialisation du module project.
 
 [RESPONSIBILITY]
-- Définir les modules accessibles au sein du package.
-- Faciliter les imports relatifs.
+- Exposer les fonctions clés des sous-modules.
+- Gérer les métadonnées du package.
 """
+
+##
+# @file __init__.py
+# @brief Initialisation du module project.
+#
+
+from __future__ import annotations

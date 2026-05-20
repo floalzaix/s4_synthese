@@ -12,6 +12,12 @@ Utilitaire centralisé pour la cohérence graphique du projet.
 - seaborn
 """
 
+##
+# @file viz_utils.py
+# @brief Utilitaire centralisé pour la cohérence graphique du projet.
+# @details Définit les thèmes, les palettes de couleurs et les utilitaires de sauvegarde de figures.
+#
+
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -45,12 +51,19 @@ FIG_LARGE = (14, 10)
 
 
 def clean_label(label: str) -> str:
-    """@brief Retourne un label lisible à partir d'une clé technique."""
+    """
+    @brief Retourne un label lisible à partir d'une clé technique.
+    @param label Nom technique de la caractéristique.
+    @return str Label nettoyé pour affichage.
+    """
     return LABEL_MAP.get(label, str(label).replace("_", " ").title())
 
 
 def setup_style():
-    """@brief Configure le style global pour les graphiques."""
+    """
+    @brief Configure le style global pour les graphiques.
+    @details Définit le thème Seaborn, le DPI et les polices par défaut.
+    """
     sns.set_theme(style="whitegrid")
     plt.rcParams.update(
         {
@@ -66,7 +79,13 @@ def setup_style():
 
 
 def save_fig(fig, path: Path, name: str):
-    """@brief Sauvegarde une figure de manière propre."""
+    """
+    @brief Sauvegarde une figure de manière propre.
+    @param fig Objet matplotlib Figure.
+    @param path Chemin de destination (Path).
+    @param name Nom du fichier (sans extension).
+    @return Path Chemin complet du fichier sauvegardé.
+    """
     path.mkdir(parents=True, exist_ok=True)
     full_path = path / f"{name}.png"
     fig.tight_layout()
@@ -76,4 +95,8 @@ def save_fig(fig, path: Path, name: str):
 
 
 def get_palette():
+    """
+    @brief Retourne la palette de couleurs officielle du projet.
+    @return dict Dictionnaire {groupe: couleur}.
+    """
     return PALETTE

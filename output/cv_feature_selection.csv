@@ -1,0 +1,6 @@
+fold,n_selected,mean_L,std_L,mean_R,std_R,mean_asym,std_asym,mean_abs_diff,peak_L,peak_R,diff_peak,auc_L,auc_R,diff_auc,ratio_auc_L_over_R,n_steps,cadence_spm,mean_interval_L,cv_interval_L,mean_interval_R,cv_interval_R,n_steps_L_seg,n_steps_R_seg,mean_stance_L,mean_stance_R,mean_swing_L,mean_swing_R,cv_stance_L,cv_stance_R,cv_swing_L,cv_swing_R,asym_stance,asym_swing,asym_auc_steps
+1,6,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1
+2,8,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,1,1,1
+3,10,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,1,1,0,1,1,1,0
+4,13,0,0,0,0,1,1,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,1,1,0,0,1,0,1,1,1,1,1
+5,10,0,0,1,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,1,1,0

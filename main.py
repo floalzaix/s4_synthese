@@ -3,25 +3,31 @@
 Point d'entrée principal du projet gaitpdb - Reporting Visuel Complet.
 
 [RESPONSIBILITY]
-- Exécuter la validation robuste.
-- Générer l'atlas visuel complet (XAI, Validation, Segmentation, Advanced Viz).
-- Centraliser les appels vers les modules project.*.
+- Charger la matrice de features une seule fois (évite 7 re-calculs).
+- Exécuter la validation robuste (K-Fold, LOSO).
+- Benchmarker plusieurs algorithmes de ML.
+- Analyser la réduction de l'espace de features (Phase 4).
+- Réaliser une analyse exploratoire de clustering (PCA, t-SNE, KMeans).
+- Générer l'atlas visuel complet (XAI, Segmentation, Gait Profiles).
 
 [DEPENDENCIES]
-- project.validate
-- project.xai
-- project.visual_check
-- project.viz_advanced
-- project.viz_bridge
+- project.*
 """
 
 from __future__ import annotations
 
+import project.feature_reduction
+import project.fuzzy_clustering
+import project.model_comparison
+import project.patient_clustering
 import project.validate
 import project.visual_check
 import project.viz_advanced
 import project.viz_bridge
 import project.xai
+
+from project.config import SESSION
+from project.features import build_feature_matrix
 
 
 def main():
@@ -29,34 +35,60 @@ def main():
     print("   GAITPDB PIPELINE - ATLAS VISUEL COMPLET")
     print("====================================================\n")
 
+    # Chargement unique — toutes les étapes supervisées/non-supervisées
+    # utilisent le même DataFrame pour garantir la reproductibilité.
+    print("[0/9] Chargement de la matrice de features (calcul unique)...")
+    df = build_feature_matrix(session=SESSION)
+    print(f"OK. {len(df)} sujets chargés (session {SESSION}).\n")
+
     # 1. Validation Finale (K-Fold, LOSO, Métriques)
-    print("[1/5] Exécution de la Validation Finale...")
-    project.validate.main()
+    print("[1/9] Exécution de la Validation Finale...")
+    project.validate.run_validation(df=df)
     print("OK.\n")
 
-    # 2. XAI (Importance, Distributions, Corrélations)
-    print("[2/5] Génération du rapport XAI...")
-    project.xai.run_xai_analysis()
+    # 2. Comparaison Multi-Algorithmes
+    print("[2/9] Comparaison des algorithmes (Benchmarking)...")
+    project.model_comparison.run_model_comparison(df=df)
     print("OK.\n")
 
-    # 3. Contrôle Qualité Segmentation (Detailed Plots)
-    print("[3/5] Génération du contrôle qualité segmentation...")
+    # 3. Clustering & Projections
+    print("[3/9] Analyse de Clustering et Projections (PCA/t-SNE)...")
+    project.patient_clustering.run_patient_clustering(df=df)
+    print("OK.\n")
+
+    # 4. Fuzzy Clustering
+    print("[4/9] Analyse Fuzzy Clustering (Appartenance Graduelle)...")
+    project.fuzzy_clustering.run_final_fuzzy(df=df)
+    print("OK.\n")
+
+    # 5. Réduction de Features (Phase 4 — trade-off performance/interprétabilité)
+    print("[5/9] Réduction de l'espace des features (Phase 4)...")
+    project.feature_reduction.run_phase4(df=df)
+    print("OK.\n")
+
+    # 6. XAI (Importance, Distributions, Corrélations)
+    print("[6/9] Génération du rapport XAI...")
+    project.xai.run_xai_analysis(df=df)
+    print("OK.\n")
+
+    # 7. Contrôle Qualité Segmentation (Detailed Plots)
+    print("[7/9] Génération du contrôle qualité segmentation...")
     project.visual_check.main()
     print("OK.\n")
 
-    # 4. Visualisations Avancées (Profiles, Heatmaps)
-    print("[4/5] Génération des profils et heatmaps d'asymétrie...")
+    # 8. Visualisations Avancées (Profiles, Heatmaps)
+    print("[8/9] Génération des profils et heatmaps d'asymétrie...")
     project.viz_advanced.main()
     print("OK.\n")
 
-    # 5. Schémas Conceptuels
-    print("[5/5] Génération des schémas conceptuels...")
+    # 9. Schémas Conceptuels
+    print("[9/9] Génération des schémas conceptuels...")
     project.viz_bridge.main()
     print("OK.\n")
 
-    print("====================================================")
+    print("==========================================================")
     print("   TERMINÉ : Toutes les figures sont dans output/figures/")
-    print("====================================================")
+    print("==========================================================")
 
 
 if __name__ == "__main__":

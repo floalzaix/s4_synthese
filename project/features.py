@@ -5,7 +5,7 @@ Ce fichier contient les fonctions d'extraction de caractéristiques (features) �
 [RESPONSIBILITY]
 - Calculer des caractéristiques de force et d'asymétrie.
 - Calculer des caractéristiques temporelles (cadence, intervalles).
-- Segmenter les pas (stub pour phase 4).
+- Segmenter les pas.
 - Construire la matrice de caractéristiques pour l'ensemble du dataset.
 
 [INPUTS]
@@ -30,7 +30,15 @@ Ce fichier contient les fonctions d'extraction de caractéristiques (features) �
 - project.load
 """
 
+##
+# @file features.py
+# @brief Fonctions d'extraction de caractéristiques (features) à partir des signaux de marche.
+# @details Calcule des descripteurs d'asymétrie, temporels et physiologiques (stance/swing).
+#
+
 from __future__ import annotations
+
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -108,16 +116,20 @@ FEATURE_COLS: list[str] = [
 META_COLS: list[str] = ["subject_id", "group", "study", "UPDRSM"]
 
 
-def _force_features(L: np.ndarray, R: np.ndarray) -> dict:
+def _force_features(L: np.ndarray, R: np.ndarray, n_samples: int) -> dict:
     """
     @brief Calcule les caractéristiques basées sur la force et l'asymétrie.
     @param L Signal de force total jambe gauche.
     @param R Signal de force total jambe droite.
+    @param n_samples Nombre de samples, utilisé pour normaliser l'AUC par durée.
     @return dict Caractéristiques de force calculées.
     """
     asym = (R - L) / (R + L + _EPS)
-    auc_L = float(np.trapezoid(L))
-    auc_R = float(np.trapezoid(R))
+    # Normalisation par n_samples : élimine le biais de durée d'enregistrement.
+    # Sans cette normalisation, un sujet enregistré 2x plus longtemps a une AUC 2x plus grande
+    # indépendamment de sa pathologie.
+    auc_L = float(np.trapezoid(L)) / n_samples
+    auc_R = float(np.trapezoid(R)) / n_samples
     return {
         "mean_L": float(L.mean()),
         "std_L": float(L.std()),
@@ -205,11 +217,9 @@ def segment_steps(x: np.ndarray) -> list[tuple[int, int]]:
 def extract_step_features(sig: pd.DataFrame) -> dict:
     """
     @brief Extrait des caractéristiques par pas (stance/swing).
-
-    Un pas (phase d'appui / stance) est détecté lorsque le signal dépasse
+    @details Un pas (phase d'appui / stance) est détecté lorsque le signal dépasse
     un seuil fixé à 5% du pic maximum du signal. La phase d'oscillation (swing)
     est définie comme l'intervalle entre deux phases d'appui successives.
-
     @param sig DataFrame contenant les signaux temporels.
     @return dict Caractéristiques physiologiques agrégées sur les pas.
     """
@@ -238,6 +248,16 @@ def extract_step_features(sig: pd.DataFrame) -> dict:
         if not segments:
             return np.array([])
         return np.array([float(np.trapezoid(x[s:e])) for s, e in segments])
+
+    if len(seg_L) > 0 and len(seg_R) > 0:
+        imbalance = min(len(seg_L), len(seg_R)) / max(len(seg_L), len(seg_R))
+        if imbalance < 0.6:
+            warnings.warn(
+                f"Déséquilibre de segmentation L/R : {len(seg_L)} vs {len(seg_R)} pas. "
+                "Les features stance/swing peuvent être peu fiables pour ce sujet.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
 
     stance_L = _calc_stance(seg_L)
     stance_R = _calc_stance(seg_R)
@@ -301,8 +321,14 @@ def extract_features(sig: pd.DataFrame) -> dict:
     L = sig["total_L"].values
     R = sig["total_R"].values
     duration = float(sig["time"].iloc[-1] - sig["time"].iloc[0])
+    if duration < 10.0:
+        warnings.warn(
+            f"Enregistrement très court ({duration:.1f}s) — features cadence/stance peu fiables.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     feats: dict = {}
-    feats.update(_force_features(L, R))
+    feats.update(_force_features(L, R, n_samples=len(L)))
     feats.update(_temporal_features(L, R, duration))
     feats.update(extract_step_features(sig))
     return feats
@@ -314,17 +340,14 @@ def build_feature_matrix(
 ) -> pd.DataFrame:
     """
     @brief Construit la matrice features pour la session donnée.
-
-    Retourne un DataFrame (META_COLS + FEATURE_COLS), 1 ligne = 1 sujet.
-    Seules les entrées avec has_signal=True sont incluses.
-
+    @details Retourne un DataFrame (META_COLS + FEATURE_COLS), 1 ligne = 1 sujet.
     @param root_dir Chemin optionnel vers le dataset.
     @param session Identifiant de la session (défaut "01").
     @return pd.DataFrame Matrice de caractéristiques.
     """
     index = load_dataset_index(root_dir)
 
-    # Session 01 = marche normale (décision Phase 1 : pas de mélange de protocoles)
+    # Session 01 = marche normale
     mask = (index["session"] == session) & index["has_signal"]
     subset = index[mask].copy()
 

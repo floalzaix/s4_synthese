@@ -1,0 +1,17 @@
+=== RAPPORT EXPLORATOIRE DE STRUCTURE LATENTE ===
+
+ESPACE DE CALCUL ET PROJECTIONS :
+- Le clustering (K-Means, GMM) est calculé dans l'espace mathématique réel à 8 dimensions (standardisé).
+- Features utilisées : mean_asym, asym_stance, std_asym, cv_swing_R, asym_swing, cv_stance_L, cv_swing_L, asym_auc_steps
+- Ces features sont les features stables identifiées par la validation croisée (cv_feature_stability.csv, frequence >= 60%).
+- Les projections (PCA 2D/3D, t-SNE) sont des outils de lecture visuelle. Elles illustrent les principales sources de variance.
+
+MÉTRIQUE PRINCIPALE :
+- Silhouette Score (K-Means) : 0.3434
+
+INTERPRÉTATION CLINIQUE PRUDENTE :
+-> STRUCTURE LATENTE MODÉRÉE À MARQUÉE : Une séparation utile émerge, mais elle reste incomplète.
+-> Le recouvrement observé (visible sur le Pairplot et les projections) est la réalité clinique de ces données. Il ne faut pas forcer une séparation artificielle.
+
+CONCLUSION :
+L'analyse confirme que la frontière diagnostique n'est pas triviale. Les clusters trouvés de manière non supervisée ne répliquent pas parfaitement les labels cliniques. Ce chevauchement structurel rend indispensable l'utilisation de modèles supervisés complexes (RF, SVM) ou justifie une éventuelle exploration en Deep Learning pour capturer des signatures dynamiques plus fines.

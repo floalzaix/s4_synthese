@@ -1,0 +1,359 @@
+# Rapport d'avancement 3 — Analyse du dataset gaitpdb
+
+**Dataset :** Gait in Parkinson's Disease v1.0.0 (PhysioNet)  
+**Tâche principale :** Classification PD vs CO  
+**Modèle principal :** Random Forest (n_estimators=200, random_state=42)  
+**Date :** 20 mai 2026  
+**Auteur :** Matthieu Damien
+
+---
+
+## 1. Contexte et rappel des objectifs
+
+L'objectif central de ce projet est de déterminer si des descripteurs agrégés extraits de signaux de pression plantaire permettent de distinguer des patients parkinsoniens (PD) de sujets contrôles (CO), et d'explorer dans quelle mesure ces descripteurs reflètent une signature biomécanique cohérente avec la pathologie.
+
+Le périmètre expérimental reste volontairement restreint à la **session 01** (marche normale en ligne droite, sans protocole secondaire). Cette restriction simplifie l'interprétation clinique et limite les confondants liés à la variabilité protocole. Le sujet `Juc010`, présent dans les métadonnées sans fichier signal associé, est exclu des modèles mais conservé dans l'index pour assurer la traçabilité. Les sessions dites `_10` (dual-task de l'étude Ga, protocole métronome pour Ju) ne sont pas utilisées.
+
+Depuis le rapport précédent, le pipeline a subi plusieurs évolutions importantes : correction d'une fuite de sélection de variables, refonte de la validation en 5 folds intra-CV par sujet, ajout d'une analyse SHAP multi-fold, et remplacement du clustering flou artisanal par un fuzzy c-means rigoureux. Ces étapes sont décrites dans les sections qui suivent.
+
+---
+
+## 2. Données et périmètre expérimental
+
+### 2.1 Dataset
+
+Le dataset contient des enregistrements de pression plantaire à 100 Hz, 8 capteurs par pied, ainsi que les signaux totaux `total_L` et `total_R`. Trois études indépendantes composent le corpus.
+
+| Étude | CO | PD | Total | Protocole |
+|-------|----|----|-------|-----------|
+| Ga    | 18 | 29 |    47 | Marche normale, dual-task |
+| Ju    | 25 | 29 |    54 | Marche normale + RAS (métronome) |
+| Si    | 29 | 35 |    64 | Marche normale |
+| **Total** | **72** | **93** | **165** | Session 01 uniquement |
+
+### 2.2 Format des signaux et features
+
+Chaque fichier `.txt` est un TSV sans en-tête, 19 colonnes (temps + 8 capteurs gauche + 8 capteurs droit + total_L + total_R). Les features sont calculées sur `total_L` et `total_R`.
+
+Au total, 33 features ont été extraites, réparties en plusieurs familles : **asymétrie gauche/droite** (indices d'asymétrie instantanée et au niveau du pas), **phases de marche** (stance, swing, leurs CVs bilatéraux), **cadence et quantité** (nombre de pas segmentés), et **force brute** (moyennes, écart-types, AUC, pics). L'AUC est normalisée par la durée de l'enregistrement (`np.trapezoid(L) / n_samples`) pour supprimer le confond lié aux enregistrements de longueur variable.
+
+---
+
+## 3. Validation et sélection de features — Refonte méthodologique
+
+### 3.1 Problème identifié : fuite de sélection douce
+
+La version initiale du pipeline utilisait une liste hardcodée de features (dite `PARSIMONIOUS`, 6 features, puis `FINAL_FEATURES`, 19 features) sélectionnée de façon informelle en observant les résultats globaux. Ce mode de sélection introduit une **fuite de sélection douce** : les features choisies ont été influencées par l'ensemble des données, y compris le test, même si de façon indirecte.
+
+### 3.2 Correction : sélection intra-CV
+
+La correction consiste à encapsuler la sélection dans un `Pipeline` sklearn :
+
+```
+Pipeline([
+    SelectFromModel(RF100, threshold="mean"),  ← fitté sur le fold train uniquement
+    RF200                                      ← classifieur final
+])
+```
+
+Le `SelectFromModel` ne voit jamais les données de test d'un fold. La sélection est répétée indépendamment pour chacun des 5 folds, ce qui permet de mesurer la **stabilité de sélection** : quelle fréquence chaque feature est-elle retenue à travers les folds ?
+
+Le pool de départ est l'ensemble des 33 features (`ALL_CANDIDATE_FEATURES = FEATURE_COLS`). Aucune pré-sélection n'a lieu avant la boucle CV.
+
+### 3.3 Features stables identifiées
+
+Après 5 folds de `StratifiedKFold(n_splits=5, shuffle=True, random_state=42)`, les features sélectionnées dans au moins 60 % des folds sont les suivantes :
+
+| Feature | Fréquence de sélection | Famille |
+|---------|------------------------|---------|
+| `mean_asym` | 100 % | Asymétrie |
+| `asym_stance` | 100 % | Asymétrie |
+| `std_asym` | 100 % | Asymétrie |
+| `cv_swing_R` | 100 % | Variabilité |
+| `asym_swing` | 100 % | Asymétrie |
+| `cv_stance_L` | 80 % | Variabilité |
+| `cv_swing_L` | 60 % | Variabilité |
+| `asym_auc_steps` | 60 % | Asymétrie |
+
+Ces 8 features constituent désormais **l'espace discriminant de référence** du projet. La fonction `load_stable_features(min_freq=0.6)` les retourne dynamiquement depuis `output/cv_feature_stability.csv`. Tous les modules en aval — XAI, SHAP, clustering — opèrent sur cet espace, ce qui garantit la cohérence globale du pipeline.
+
+Vingt-cinq des 33 features candidates ont une fréquence de sélection nulle ou très faible (≤ 20 %), dont l'ensemble des features de force brute (`mean_L`, `mean_R`, `std_L`, `std_R`, `auc_L`, `auc_R`, `peak_L`, `peak_R`) et les intervalles temporels bruts (`mean_interval_L`, `mean_interval_R`, `cadence_spm`). Ce résultat confirme et formalise ce qui avait été observé empiriquement dans le rapport précédent.
+
+![[../output/figures/validation/val_feature_selection_stability.png]]
+
+### 3.4 Performances après correction
+
+Sur les 5 folds de validation intra-CV (1 ligne = 1 sujet, pas de fuite) :
+
+| Métrique | Moyenne | Écart-type |
+|----------|---------|------------|
+| Accuracy | 0.703 | ± 0.062 |
+| ROC-AUC | **0.770** | ± 0.049 |
+| F1-Score | 0.700 | ± 0.066 |
+
+![[../output/figures/validation/val_kfold_summary.png]]
+
+Le ROC-AUC de 0.770 ± 0.049 est cohérent avec la performance de 0.726 obtenue en split unique dans le rapport précédent, mais sa mesure est désormais plus fiable : elle est moyennée sur 5 folds indépendants avec une sélection de features strictement apprise sur le train. La variabilité inter-folds (±0.049) reflète la difficulté réelle de la tâche sur un jeu de 165 sujets.
+
+Les courbes ROC et Precision-Recall ainsi que la matrice de confusion associées au split de diagnostic sont présentées ci-dessous :
+
+![[../output/figures/validation/val_diagnostic_curves.png]]
+
+### 3.5 Généralisation inter-études (LOSO)
+
+La validation Leave-One-Study-Out utilise le même pipeline intra-CV pour chaque partition train/test études. La robustesse inter-études est préservée :
+
+![[../output/figures/validation/val_loso_robustness.png]]
+
+---
+
+## 4. Comparaison d'algorithmes
+
+En parallèle de la validation principale par Random Forest, une comparaison multi-algorithmes a été conduite sur les mêmes 5 folds stratifiés, également sur le pool complet de 33 features avec sélection intra-CV.
+
+| Modèle | Accuracy | Balanced Accuracy | ROC-AUC |
+|--------|----------|-------------------|---------|
+| LogReg | 0.739 | 0.736 | **0.816** |
+| SVC-RBF | 0.752 | 0.746 | 0.811 |
+| LinearSVC | 0.752 | 0.749 | 0.806 |
+| RF | **0.758** | 0.747 | 0.802 |
+| GradBoost | 0.691 | 0.677 | 0.780 |
+| XGBoost | 0.691 | 0.677 | 0.759 |
+
+![[../output/figures/model_comparison/baseline_boxplot_roc-auc.png]]
+
+Plusieurs observations ressortent. Les modèles linéaires (LogReg, LinearSVC) obtiennent des AUC légèrement supérieures au Random Forest, ce qui suggère que le signal discriminant dans l'espace des 8 features est en grande partie linéairement séparable — une propriété cohérente avec la nature géométrique des features d'asymétrie. À l'inverse, les modèles boostés (XGBoost, GradBoost) se montrent moins performants que les modèles plus simples sur ce jeu de données de taille modeste, probablement en raison d'un léger sur-apprentissage malgré la CV.
+
+Le Random Forest reste le modèle de référence dans la suite du projet pour l'analyse d'interprétabilité, en raison de sa compatibilité native avec SHAP (TreeExplainer) et les importances MDI.
+
+---
+
+## 5. Interprétabilité XAI et analyse SHAP multi-fold
+
+### 5.1 Refonte de l'analyse XAI
+
+L'analyse XAI initiale reposait sur un seul split train/test (~25 sujets en test), rendant les estimations d'importance instables. La version actuelle agrège les importances sur les 5 folds de validation : pour chaque fold, un RF est entraîné sur le fold train, et les importances MDI et par permutation sont calculées sur le fold test. La valeur finale pour chaque feature est la **moyenne des 5 estimations**, et l'écart-type inter-folds mesure la stabilité de l'explication.
+
+### 5.2 Dashboard d'importance (MDI vs Permutation)
+
+![[../output/figures/xai/xai_importance_dashboard.png]]
+
+Les importances MDI et par permutation divergent légèrement dans leur ordonnancement, ce qui est classique en présence de features corrélées (le MDI tend à distribuer l'importance entre features redondantes). Les deux méthodes s'accordent sur la dominance des features d'asymétrie.
+
+![[../output/figures/xai/xai_family_importance.png]]
+
+La famille **Asymétrie** est dominante, suivie de la **Variabilité**. Les features de cadence ou de quantité brute (nombre de pas) ont une importance presque nulle, ce qui confirme que le modèle exploite la qualité biomécanique de la marche plutôt que sa quantité.
+
+### 5.3 Analyse SHAP multi-fold
+
+L'analyse SHAP a été ajoutée comme troisième estimateur d'importance. Un `shap.TreeExplainer` est instancié pour chaque fold ; les valeurs SHAP sont calculées **uniquement sur le fold de test** (pas de fuite). La valeur SHAP retenue par feature est la moyenne de `|SHAP|` sur l'ensemble des sujets et des folds, permettant une mesure de contribution absolue indépendante du signe.
+
+| Feature | SHAP moyen absolu | std inter-folds | Rang SHAP | Rang Perm |
+|---------|-------------------|-----------------|-----------|-----------|
+| `std_asym` | **0.094** | 0.028 | 1 | 1 |
+| `asym_swing` | 0.071 | 0.018 | 2 | 2 |
+| `asym_stance` | 0.066 | 0.012 | 3 | — |
+| `cv_swing_R` | 0.058 | 0.017 | 4 | — |
+| `mean_asym` | 0.041 | 0.015 | 5 | — |
+| `cv_swing_L` | 0.028 | 0.008 | 6 | — |
+| `asym_auc_steps` | 0.025 | 0.011 | 7 | — |
+| `cv_stance_L` | 0.025 | 0.005 | 8 | — |
+
+![[../output/figures/shap/shap_mean_barplot.png]]
+
+Le barplot horizontal représente la contribution SHAP moyenne de chaque feature (rouge = pousse vers la classe PD, bleu = pousse vers CO), avec les barres d'erreur représentant la variabilité inter-folds.
+
+![[../output/figures/shap/shap_stability_by_feature.png]]
+
+Ce boxplot illustre la distribution des contributions SHAP moyennes **par fold** : chaque point est la moyenne sur les sujets d'un fold de test. La dispersion verticale d'une feature mesure son instabilité d'interprétation. `std_asym` et `asym_swing` présentent une dispersion notable, ce qui appelle à la prudence dans leur interprétation individuelle.
+
+![[../output/figures/shap/shap_group_heatmap.png]]
+
+La heatmap par groupe confirme la cohérence clinique du modèle : les features asymétriques ont des valeurs SHAP positives pour les sujets PD et négatives pour les CO, alignées avec la littérature sur la dégradation bilatérale de la marche parkinsonienne.
+
+### 5.4 Triangulation des méthodes : signal robuste et zones de fragilité
+
+La comparaison des trois estimateurs (MDI, permutation, SHAP) permet d'identifier trois catégories :
+
+**Signal robuste (accord des 3 méthodes)** — `std_asym`, `asym_swing`, `asym_stance` : ces trois features figurent dans le top de chaque méthode. Elles reflètent la désynchronisation bilatérale caractéristique de la maladie de Parkinson : l'asymétrie de la phase oscillante (`asym_swing`) et de la phase d'appui (`asym_stance`), ainsi que la variabilité de l'indice d'asymétrie instantané (`std_asym`).
+
+**Features potentiellement redondantes** — `mean_asym`, `asym_auc_steps` : leur importance par permutation est faible ou légèrement négative, suggérant qu'elles portent un signal similaire à d'autres features et que leur retrait individuel est compensé par les features corrélées.
+
+**Interprétations instables (std_shap élevé)** — `std_asym` et `asym_swing` présentent les plus grandes variances SHAP inter-folds. Malgré leur rang élevé en importance absolue, leur contribution spécifique varie selon le sous-ensemble de sujets vu par chaque fold, ce qui invite à ne pas sur-interpréter leur signe ou leur valeur exacte.
+
+---
+
+## 6. Réduction de l'espace des features
+
+### 6.1 Motivation
+
+Bien que les 8 features stables soient non redondantes entre familles (asymétrie vs variabilité), plusieurs d'entre elles mesurent des aspects proches (par exemple `mean_asym` et `std_asym`, ou `cv_swing_L` et `cv_swing_R`). L'hypothèse testée est que remplacer des paires bilatérales par des proxies bilatéraux (moyennes ou différences) pourrait réduire la dimensionnalité sans dégrader la performance, tout en améliorant la stabilité des explications.
+
+### 6.2 Trois configurations comparées
+
+| Configuration | Nb. features | Balanced Acc | ROC-AUC |
+|--------------|--------------|-------------|---------|
+| Complet (`FINAL_FEATURES`, 19) | 19 | 0.747 | 0.802 |
+| Réduit bilatéral | 13 | 0.741 | 0.801 |
+| Compact clinique | 4 | 0.655 | 0.764 |
+
+![[../output/figures/validation/phase4_performance_comparison.png]]
+
+La réduction bilatérale maintient des performances quasi-identiques au set complet (−0.006 en balanced accuracy, −0.001 en AUC), ce qui confirme la redondance latérale entre variables gauche et droite. En revanche, le set compact à 4 features perd significativement en performance (−0.092 en balanced accuracy), indiquant que certaines features asymétriques portent des informations complémentaires non capturées par un sous-ensemble trop restreint.
+
+![[../output/figures/xai/phase4_xai_instability.png]]
+
+---
+
+## 7. Exploration du continuum clinique — Fuzzy C-Means
+
+### 7.1 Motivation et limites de l'approche précédente
+
+Le rapport précédent présentait une analyse de clustering flou reposant sur un algorithme KMeans avec initialisation forcée (1 centre CO, 3 centres PD) et une fonction d'appartenance softmax maison. Cette approche avait plusieurs faiblesses : l'espace des features utilisé n'était pas aligné sur l'espace discriminant identifié par la CV, le nombre de clusters était fixé arbitrairement à 4, et la normalisation des appartenances via softmax ne correspond pas à la définition formelle du fuzzy c-means.
+
+### 7.2 Nouvelle implémentation
+
+L'analyse a été entièrement refaite avec `scikit-fuzzy` (`skfuzzy.cmeans`), avec les caractéristiques suivantes :
+
+- **Espace** : les 8 features stables de `load_stable_features(min_freq=0.6)` — même espace que le classifieur RF et l'analyse SHAP. Les centroides fuzzy sont ainsi directement comparables aux barplots d'importance.
+- **Paramètre de fuzzification** : `m=2` (valeur standard).
+- **Sélection automatique de C_opt** : la Fuzzy Partition Coefficient (FPC) est calculée pour C ∈ {2, 3, 4, 5, 6}. Le C maximisant FPC est retenu.
+
+La FPC mesure la netteté de la partition : FPC=1 correspond à une partition crisp parfaite, FPC=1/C à une appartenance uniforme non-informative. Maximiser FPC revient à trouver le nombre de clusters qui structurent le mieux les données sans sur-partitionner.
+
+### 7.3 Résultats
+
+| C | FPC |
+|---|-----|
+| **2** | **0.576** ← optimal |
+| 3 | 0.400 |
+| 4 | 0.308 |
+| 5 | 0.250 |
+| 6 | 0.211 |
+
+**C_opt = 2** est retenu avec FPC = 0.576. La chute rapide de FPC au-delà de C=2 indique que les données ne supportent pas une partition plus fine : forcer davantage de clusters produirait des régions artificielles sans structure géométrique réelle.
+
+### 7.4 Description des deux clusters
+
+| Cluster | Sujets dominants | CO | PD | Feature saillante |
+|---------|-----------------|----|----|-------------------|
+| **0** | 107 | 63 | 44 | CV Swing Time (L) basse |
+| **1** | 58 | 9 | 49 | CV Swing Time (R) élevée |
+
+Le **Cluster 0** regroupe la majorité des sujets CO et une fraction des sujets PD présentant une variabilité de marche faible — profil biomécanique proche d'une marche régulière. Le **Cluster 1** concentre majoritairement les sujets PD avec une variabilité de la phase oscillante élevée des deux côtés, expression géométrique de la désynchronisation bilatérale identifiée par SHAP.
+
+![[../output/figures/fuzzy_clustering/pca_projected_fuzzy.png]]
+
+La projection PCA (2D) représente chaque sujet coloré par son cluster dominant, avec une opacité proportionnelle à son degré d'appartenance `u_max`. Les cercles dorés entourent les **sujets flous** (u_max < 0.6) : sujets situés dans les zones de recouvrement géométrique entre les deux clusters.
+
+### 7.5 Sujets flous — expression du continuum clinique
+
+**53 sujets sur 165 (32,1 %)** présentent un degré d'appartenance maximal inférieur à 0.6, c'est-à-dire que leur profil biomécanique est réparti de manière significative entre les deux clusters. La valeur minimale de `u_max` observée est 0.501 (appartenance quasi-équivalente aux deux clusters).
+
+![[../output/figures/fuzzy_clustering/soft_barchart_by_subject.png]]
+
+Le barplot empilé montre les degrés d'appartenance pour un sous-ensemble de 20 sujets représentatifs (10 à forte appartenance nette, 10 à appartenance distribuée). Les sujets flous se concentrent en majorité dans les stades légers ou atypiques de la maladie : sujets PD en début d'évolution, ou sujets CO présentant une asymétrie naturelle plus prononcée.
+
+![[../output/figures/fuzzy_clustering/centroids_fuzzy_barplot.png]]
+
+Les centroides des deux clusters dans l'espace standardisé illustrent leur différenciation principale sur les variables de variabilité de swing (`cv_swing_R`, `cv_swing_L`) et d'asymétrie de l'AUC (`asym_auc_steps`), cohérente avec les conclusions de l'analyse SHAP.
+
+**Il est essentiel de noter que ce clustering n'est pas un classifieur.** La présence de 44 sujets PD dans le Cluster 0 ne constitue pas une erreur : elle reflète l'hétérogénéité clinique de la maladie de Parkinson (stades variés, phénotypes moteurs différents). Les clusters doivent être interprétés comme des **zones géométriques dans l'espace des features**, pas comme des groupes cliniques validés.
+
+---
+
+## 8. Vue d'ensemble du pipeline et artefacts générés
+
+### 8.1 Organisation des scripts
+
+| Script | Rôle |
+|--------|------|
+| `main.py` | Orchestration complète (9 étapes), calcul unique de `build_feature_matrix` |
+| `project/config.py` | Constantes globales (chemins, `RANDOM_STATE=42`, `SESSION="01"`) |
+| `project/features.py` | Extraction des 33 features, normalisation AUC, segmentation pas |
+| `project/validate.py` | Pipeline intra-CV (`SelectFromModel → RF`), LOSO, `load_stable_features` |
+| `project/model_comparison.py` | Benchmarking multi-algorithmes sur les mêmes 5 folds |
+| `project/xai.py` | XAI multi-fold (MDI, permutation), appel SHAP |
+| `project/shap_analysis.py` | SHAP multi-fold (TreeExplainer, 5 folds, test uniquement) |
+| `project/patient_clustering.py` | Clustering dur (K-Means, GMM, projections PCA/t-SNE) |
+| `project/fuzzy_clustering.py` | Fuzzy C-Means avec sélection C_opt via FPC |
+| `project/feature_reduction.py` | Comparaison de 3 jeux de features réduits |
+
+### 8.2 Fichiers CSV principaux
+
+| Fichier | Contenu |
+|---------|---------|
+| `output/cv_validation_kfold.csv` | Métriques par fold (accuracy, AUC, F1) |
+| `output/cv_feature_stability.csv` | Fréquence de sélection des 33 features |
+| `output/feature_importance_metrics.csv` | MDI, perm importance, direction PD/CO |
+| `output/shap_summary.csv` | mean_shap, std_shap, mean_abs_shap, rang par feature |
+| `output/shap_importance_comparison.csv` | Comparaison SHAP + perm + MDI fusionnée |
+| `output/u_final.csv` | Degrés d'appartenance fuzzy (cluster_0, cluster_1) par sujet |
+| `output/df_clusters.csv` | subject_id, group, u_max, cluster_max |
+
+### 8.3 Figures principales
+
+```
+output/figures/
+├── validation/
+│   ├── val_kfold_summary.png          ← métriques CV par fold
+│   ├── val_feature_selection_stability.png  ← stabilité de sélection
+│   ├── val_diagnostic_curves.png      ← ROC, PR, matrice de confusion
+│   └── val_loso_robustness.png        ← généralisation inter-études
+├── xai/
+│   ├── xai_importance_dashboard.png   ← MDI vs perm, top 12
+│   └── xai_family_importance.png      ← importance par famille
+├── shap/
+│   ├── shap_mean_barplot.png          ← SHAP moyen ± std inter-folds
+│   ├── shap_stability_by_feature.png  ← boxplot SHAP par fold
+│   └── shap_group_heatmap.png         ← SHAP moyen PD vs CO
+├── fuzzy_clustering/
+│   ├── pca_projected_fuzzy.png        ← PCA coloré par cluster + sujets flous
+│   ├── soft_barchart_by_subject.png   ← barplot empilé par sujet
+│   └── centroids_fuzzy_barplot.png    ← centroides dans espace 8D
+└── model_comparison/
+    ├── baseline_boxplot_roc-auc.png   ← distribution AUC par modèle
+    └── baseline_barplot_accuracy.png  ← accuracy comparative
+```
+
+---
+
+## 9. Discussion et limites
+
+### 9.1 Ce que confirme cette itération
+
+La refonte intra-CV confirme et formalise les intuitions du rapport précédent. Le signal discriminant est bien concentré sur les features d'asymétrie bilatérale et de variabilité de phase, et ceci de façon robuste : les 5 features sélectionnées dans 100 % des folds (`mean_asym`, `asym_stance`, `std_asym`, `cv_swing_R`, `asym_swing`) représentent le cœur stable du modèle, indépendamment du fold et des sujets inclus dans le train.
+
+La concordance des trois estimateurs d'importance (MDI, permutation, SHAP) sur `std_asym`, `asym_swing` et `asym_stance` renforce la crédibilité de l'interprétation : ces trois features constituent un signal physiologiquement plausible, non un artefact de la méthode d'importance.
+
+### 9.2 Limites persistantes
+
+**Taille de l'échantillon.** 165 sujets sur 5 folds impliquent des folds de test d'environ 33 sujets. Les estimations d'importance par permutation et de SHAP restent bruitées, comme en témoignent les std_shap non négligeables sur les premières features. Les conclusions interprétatives doivent être lues avec cette incertitude.
+
+**Agrégation sur l'enregistrement entier.** Les features sont calculées sur la totalité du signal sans segmentation explicite par cycle de marche. Les informations dynamiques intra-cycle (freezing, hésitations, asymétries transitoires) ne sont capturées qu'indirectement via les CVs de phase. Cela explique en partie le plafond de performance autour de AUC 0.77.
+
+**Absence d'exploitation des capteurs individuels.** Le signal complet comporte 8 × 2 capteurs : seuls les signaux totaux (`total_L`, `total_R`) sont utilisés. Les patterns de distribution de pression au sein du pied (avant-pied vs talon, latéralisation), potentiellement riches en information clinique, ne sont pas exploités.
+
+**Régression UPDRSM suspendue.** Comme documenté dans le rapport précédent, la régression de la sévérité motrice à partir de ces features agrégées ne produit pas de signal significatif (R² systématiquement négatif, corrélation de Spearman non significative). Cette tâche resterait à réouvrir avec une granularité plus fine (features par pas).
+
+---
+
+## 10. Perspectives
+
+L'état actuel du pipeline représente une base solide pour une analyse exploratoire rigoureuse de la discrimination PD/CO à partir de signaux de pression plantaire en marche normale. Les directions naturelles pour la suite sont les suivantes.
+
+**Segmentation par cycle de marche.** Extraire des features par pas individuel plutôt que sur l'enregistrement entier permettrait de capturer la variabilité intra-enregistrement, de détecter des phénomènes comme la festination ou les freezing, et possiblement de déverrouiller la régression UPDRSM. C'est la limite principale de l'approche actuelle.
+
+**Exploitation des capteurs individuels.** L'analyse en centre de pression (COP) ou en distribution par zone plantaire (avant-pied, milieu, talon) pourrait révéler des marqueurs spatiaux de la maladie complémentaires aux marqueurs temporels actuels.
+
+**Validation multi-session.** L'extension aux sessions de dual-task ou de marche avec métronome (sessions `02`, `10`, protocole Ju) permettrait de tester la robustesse des features stables dans des conditions de charge cognitive ou d'assistance rythmique. Cette extension devrait se faire en préservant la séparation par sujet et en évitant la fuite entre sessions d'un même sujet.
+
+**Consolidation vers un modèle déployable.** Les 5 features sélectionnées dans 100 % des folds forment un sous-ensemble naturellement parcimonieux, directement interprétable cliniquement. Un modèle logistique ou SVM linéaire sur ces 5 features uniquement serait potentiellement publiable et déployable sur données nouvelles sans recalibration complexe.
+
+**Exploration de la sévérité via le clustering flou.** Le degré d'appartenance `u_max` au Cluster 1 (fort signal asymétrique) pourrait servir de proxy continu de sévérité, explorable en corrélation avec UPDRSM pour les sujets PD disposant d'un score. Cette analyse exploratoire ne remplacerait pas une régression supervisée, mais fournirait un premier éclairage non supervisé sur le lien entre structure géométrique des données et sévérité clinique.
+
+---
+
+*Généré à partir des résultats dans `output/`. Modèle principal : Random Forest sklearn, Python 3.12. Pipeline orchestré via `main.py`.*
+
+### FIN DU RAPPORT

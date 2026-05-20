@@ -10,6 +10,12 @@ Schémas conceptuels harmonisés pour le rapport final.
 - output/figures/concept_map/*.png
 """
 
+##
+# @file viz_bridge.py
+# @brief Schémas conceptuels harmonisés.
+# @details Génère des diagrammes expliquant le pipeline de traitement et le pont entre dynamique et statique.
+#
+
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
@@ -19,7 +25,11 @@ from project.viz_utils import PALETTE, save_fig, setup_style
 
 setup_style()
 
+
 def plot_bridge():
+    """
+    @brief Génère le schéma du pont conceptuel Dynamique -> Statique.
+    """
     fig, ax = plt.subplots(figsize=(12, 7))
     ax.set_xlim(0, 10)
     ax.set_ylim(0, 8)
@@ -68,6 +78,9 @@ def plot_bridge():
 
 
 def plot_logic():
+    """
+    @brief Génère le schéma de l'architecture logique du pipeline.
+    """
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.set_xlim(0, 10)
     ax.set_ylim(0, 6)
@@ -93,10 +106,12 @@ def plot_logic():
 
 
 def main():
+    """
+    @brief Point d'entrée principal pour les schémas conceptuels.
+    """
     plot_bridge()
     plot_logic()
 
-    plot_logic()
 
 if __name__ == "__main__":
     main()

@@ -12,6 +12,12 @@ Visualisations avancées : Profils de marche et distributions stratifiées.
 - output/figures/asymmetry_heatmaps/*.png
 """
 
+##
+# @file viz_advanced.py
+# @brief Visualisations avancées de la marche.
+# @details Génère des profils de force moyens, des heatmaps d'asymétrie et des analyses stratifiées.
+#
+
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
@@ -36,6 +42,14 @@ setup_style()
 
 
 def _normalize(sig, s, e, n=100):
+    """
+    @brief Normalise un segment de signal temporel à une longueur fixe.
+    @param sig Signal brut.
+    @param s Index de début.
+    @param e Index de fin.
+    @param n Nombre de points cibles (défaut 100).
+    @return np.ndarray Signal normalisé.
+    """
     seg = sig[s:e]
     if len(seg) < 2:
         return np.full(n, np.nan)
@@ -50,6 +64,9 @@ def _normalize(sig, s, e, n=100):
 
 
 def generate_atlas_profiles():
+    """
+    @brief Génère les profils de force consolidés et les heatmaps d'asymétrie.
+    """
     print(f"--- Optimisation Profils de Marche - Session: {SESSION} ---")
     idx = load_dataset_index()
     subset = idx[(idx["session"] == SESSION) & (idx["has_signal"])]
@@ -121,6 +138,9 @@ def generate_atlas_profiles():
 
 
 def generate_faceted_distributions():
+    """
+    @brief Génère des boxplots stratifiés par étude pour les features clés.
+    """
     df = build_feature_matrix(session=SESSION)
     feats = ["std_asym", "asym_swing", "cv_swing_L", "n_steps"]
     for f in feats:
@@ -134,6 +154,9 @@ def generate_faceted_distributions():
 
 
 def main():
+    """
+    @brief Point d'entrée principal pour les visualisations avancées.
+    """
     generate_atlas_profiles()
     generate_faceted_distributions()
 
