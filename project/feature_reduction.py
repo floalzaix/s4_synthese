@@ -50,7 +50,10 @@ setup_style()
 
 # --- DÉFINITION DES SETS DE FEATURES ---
 
-# 1. Complet (Baseline actuelle)
+# 1. Baseline parcimonieuse (FINAL_FEATURES = 19 features pré-définies).
+# Nommée "Complet" dans la comparaison car c'est le set de référence de ce module,
+# mais ce n'est pas le pool complet de 33 features (ALL_CANDIDATE_FEATURES).
+# L'objectif de cette Phase 4 est d'évaluer des réductions par rapport à ce baseline.
 SET_FULL = FINAL_FEATURES.copy()
 
 # 2. Réduit (Bilatéral Moyenné + Asymétrie)

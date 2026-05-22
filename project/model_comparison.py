@@ -183,6 +183,10 @@ def run_model_comparison(session: str = "01", df: pd.DataFrame | None = None):
 
     if df is None:
         df = build_feature_matrix(session=session)
+    # FINAL_FEATURES : 19 features parcimonieuses pré-définies (subset de FEATURE_COLS).
+    # Ce benchmark évalue les modèles sur cet espace fixe, sans sélection intra-CV.
+    # Il est complémentaire à run_validation() (qui fait SelectFromModel sur 33 features)
+    # et produit des comparaisons multi-algorithmes sur un espace homogène et reproductible.
     clf_df = df.dropna(subset=FINAL_FEATURES).copy()
 
     print(

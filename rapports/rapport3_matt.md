@@ -342,7 +342,7 @@ La concordance des trois estimateurs d'importance (MDI, permutation, SHAP) sur `
 
 L'état actuel du pipeline représente une base solide pour une analyse exploratoire rigoureuse de la discrimination PD/CO à partir de signaux de pression plantaire en marche normale. Les directions naturelles pour la suite sont les suivantes.
 
-**Segmentation par cycle de marche.** Extraire des features par pas individuel plutôt que sur l'enregistrement entier permettrait de capturer la variabilité intra-enregistrement, de détecter des phénomènes comme la festination ou les freezing, et possiblement de déverrouiller la régression UPDRSM. C'est la limite principale de l'approche actuelle.
+**Segmentation par cycle de marche.** Plutôt que de passer par des heatmaps qui masquent une partie du signal, je propose de traiter directement le signal par pas, avec un clustering des pas et éventuellement un réseau de neurones pas‑level, agrégé au niveau sujet (par exemple 70% des pas classés PD → sujet rapproché de PD) ; cela s’aligne avec la littérature sur l’analyse du cycle de marche, tout en gardant un lien direct avec le signal, les asymétries de pression, et la possibilité de capter la variabilité intra‑enregistrement, la festination, le freezing, et potentiellement la régression UPDRSM, actuellement la principale limite de l’approche.
 
 **Exploitation des capteurs individuels.** L'analyse en centre de pression (COP) ou en distribution par zone plantaire (avant-pied, milieu, talon) pourrait révéler des marqueurs spatiaux de la maladie complémentaires aux marqueurs temporels actuels.
 

@@ -123,7 +123,7 @@ def plot_radar_centroids(X_scaled, labels, features: list[str], k=2):
     angles += angles[:1]
 
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
-    colors = ["#e41a1c", "#377eb8", "#4daf4a"]
+    colors = sns.color_palette("tab10", k)
     for i in range(k):
         values = centroids_scaled[i].tolist()
         values += values[:1]
@@ -257,7 +257,10 @@ def run_patient_clustering(session: str = "01", df=None):
         "study": clf_df["study"].values,
         "pca1": X_pca2[:, 0],
         "pca2": X_pca2[:, 1],
-        "pca3": X_pca3[:, 2],
+        # 3D PCA components stored together — never mix with pca1/pca2 (different fit)
+        "pca3_1": X_pca3[:, 0],
+        "pca3_2": X_pca3[:, 1],
+        "pca3_3": X_pca3[:, 2],
         "tsne1": X_tsne[:, 0],
         "tsne2": X_tsne[:, 1],
         "cluster_km": labels_km,
@@ -388,9 +391,9 @@ def run_patient_clustering(session: str = "01", df=None):
     for g, c in PALETTE.items():
         m = emb_df["group"] == g
         ax.scatter(
-            emb_df[m]["pca1"],
-            emb_df[m]["pca2"],
-            emb_df[m]["pca3"],
+            emb_df[m]["pca3_1"],
+            emb_df[m]["pca3_2"],
+            emb_df[m]["pca3_3"],
             c=c,
             label=g,
             s=50,

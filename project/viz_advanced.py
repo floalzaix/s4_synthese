@@ -77,7 +77,7 @@ def generate_atlas_profiles():
     for _, row in subset.iterrows():
         try:
             sig = load_signal_file(row["filepath"])
-        except:
+        except Exception:
             continue
         L, R = sig["total_L"].values, sig["total_R"].values
         segs = segment_steps(L)
@@ -137,11 +137,13 @@ def generate_atlas_profiles():
         save_fig(fig, ASYM_FIG_DIR, "adv_asymmetry_heatmap")
 
 
-def generate_faceted_distributions():
+def generate_faceted_distributions(df=None):
     """
     @brief Génère des boxplots stratifiés par étude pour les features clés.
+    @param df Matrice de features pré-calculée (optionnel ; calculée si None).
     """
-    df = build_feature_matrix(session=SESSION)
+    if df is None:
+        df = build_feature_matrix(session=SESSION)
     feats = ["std_asym", "asym_swing", "cv_swing_L", "n_steps"]
     for f in feats:
         if f not in df.columns:
@@ -153,12 +155,13 @@ def generate_faceted_distributions():
         save_fig(fig, GAIT_FIG_DIR, f"adv_stratified_{f}")
 
 
-def main():
+def main(df=None):
     """
     @brief Point d'entrée principal pour les visualisations avancées.
+    @param df Matrice de features pré-calculée (optionnel ; calculée si None).
     """
     generate_atlas_profiles()
-    generate_faceted_distributions()
+    generate_faceted_distributions(df=df)
 
 
 if __name__ == "__main__":

@@ -92,11 +92,3 @@ def save_fig(fig, path: Path, name: str):
     fig.savefig(full_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return full_path
-
-
-def get_palette():
-    """
-    @brief Retourne la palette de couleurs officielle du projet.
-    @return dict Dictionnaire {groupe: couleur}.
-    """
-    return PALETTE

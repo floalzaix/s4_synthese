@@ -94,7 +94,7 @@ def main():
     """
     print(f"--- Optimisation QC Segmentation - Session: {SESSION} ---")
     idx = load_dataset_index()
-    targets = ["GaPt03", "JuPt01", "SiPt02", "GaCo01"]
+    targets = ["GaPt03", "JuPt01", "SiPt02", "GaCo01", "GaPt23"]
     subset = idx[idx["subject_id"].isin(targets) & (idx["session"] == SESSION)]
 
     records = []

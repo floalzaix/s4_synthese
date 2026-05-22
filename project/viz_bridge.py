@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 
-from project.config import BRIDGE_FIG_DIR, FIG_DIR
+from project.config import BRIDGE_FIG_DIR
 from project.viz_utils import PALETTE, save_fig, setup_style
 
 setup_style()
@@ -74,7 +74,7 @@ def plot_bridge():
         weight="bold",
     )
     ax.set_axis_off()
-    save_fig(fig, FIG_DIR / "cop_bridge", "final_bridge_to_cop")
+    save_fig(fig, BRIDGE_FIG_DIR, "final_bridge_to_cop")
 
 
 def plot_logic():

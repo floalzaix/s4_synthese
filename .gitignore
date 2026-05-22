@@ -6,6 +6,7 @@
 **/docs/
 **/datasets/
 
+
 # Pycache et modules compilés
 project/__pycache__/
 __pycache__/
