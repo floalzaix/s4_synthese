@@ -5,7 +5,7 @@
 **/quarkdown-output/
 **/docs/
 **/datasets/
-
+**/output/
 
 # Pycache et modules compilés
 project/__pycache__/
