@@ -1,0 +1,191 @@
+.docname {Livrable 1}
+.doctype {paged}
+.doclang {French}
+.theme {paperwhite} layout:{minimal}
+
+.docauthors
+  - Matthieu Damien
+  - Florian Alzaix
+
+<!--  Var -->
+
+.var {teachers}
+    - Maria Alice Bertolim
+
+.var {MARGIN} {1.5cm}
+
+.var {TITLE} {Livrable 1}
+
+.var {CODEHEADERCOLOR} {rgb(85, 141, 12)}
+
+<!--
+
+  Setup
+
+-->
+
+.noautopagebreak
+
+.pagemargin {bottomcenter}
+  .currentpage / .totalpages
+
+.numbering
+  - headings: 1.1.a
+  - figures: 1.1
+
+.pageformat size:{a4} margin:{.MARGIN}
+
+.pagemargin {bottomright}
+  .text {2024-2025} size:{small}
+
+.pagemargin {bottomleft}
+  .row gap:{10}
+    .foreach {.docauthors}
+      name info:
+        .text {.name} size:{small}
+
+<!--
+
+  Functions
+
+-->
+
+.function {logo}
+  .container alignment:{start} foreground:{rgba(0, 0, 0, 0)}
+    !(35%)[ESEO](images/logo.png) T
+
+.function {space}
+  width:
+  .container foreground:{rgba(0, 0, 0, 0)}
+    .column
+      .repeat {.width}
+        T
+
+.function {fig}
+    link caption? img:
+    .container fullwidth:{yes}
+      .row
+        .html {<div id=".link"></div>}
+      .img
+      .ifnot {.caption::isnone}
+          .container fullwidth:{true} margin:{-35 0 0 0}
+            .mermaid caption:{.caption}
+                flowchart TD
+
+.function {codeheader}
+  code:
+      .column gap:{0} cross:{stretch}
+        .container fullwidth:{yes} background:{.CODEHEADERCOLOR} padding:{5 0 0 15} foreground:{white} radius:{11 4 0 0}
+          .text {Code} {small} weight:{bold}
+        .container fullwidth:{yes} alignment:{center} textalignment:{center} border:{.CODEHEADERCOLOR} padding:{10} radius:{0 0 11 4}
+          .code
+
+.function {tab}
+    caption? headers rows:
+    .html {<table>}
+    .html {<thead>}
+    .html {<tr>}
+    .foreach {.headers}
+        h:
+        .html {<th>.h</th>}
+    .html {</tr>}
+    .html {</thead>}
+    .html {<tbody>}
+    .foreach {.rows}
+        r:
+        .html {<tr>}
+        .foreach {.r}
+            c:
+            .html {<td>.c</td>}
+        .html {</tr>}
+    .html {</tbody>}
+    .html {</table>}
+    .container fullwidth:{true} alignment:{center} margin:{-165 0 0 0}
+        .row alignment:{center}
+            .ifnot {.caption::isnone}
+                .mermaid caption:{.caption}
+                    flowchart
+
+.function {twocolslist}
+    elts:
+    .let {.if {.elts::size::rem {2}::equals {0}} {@lambda .elts::size::divide {2}} .ifnot {.elts::size::rem {2}::equals {0}} {@lambda .elts::size::divide {2}::sum {1}}}
+        half:
+        .container fullwidth:{true} margin:{-15 0 0 0}
+            .row alignment:{spaceevenly} cross:{start}
+                .column cross:{start}
+                    .foreach {.range {1} {.half}}
+                        i:
+                        .container margin:{0 0 10 0}
+                            * .elts::getat {.i}
+
+
+
+                .column cross:{start}
+                    .foreach {.range {.half} {.elts::size::subtract {1}}}
+                        i:
+                        .container margin:{0 0 10 0}
+                            * .elts::getat {.i::sum {1}}
+
+.function {displaylistoffigures}
+    x:
+    .container
+        .foreach {.range {1} {.x::size}}
+            i:
+            .let {.x::getat {.i}}
+                e:
+                .container classname:{figures-row}
+                    .i.
+
+                    .text {.e::last} url:{#.e::first}
+
+.function {displayglossary}
+    list:
+    .foreach {.list}
+        def:
+        .container classname:{figures-row smalltext}
+            .html {<div id=".ifnot {.def::first::equals {Open source}} {.def::first}.if {.def::first::equals {Open source}} {opensource}"></div>}
+
+            **.def::first** : .def::last
+
+
+<<<
+
+.logo
+
+.container alignment:{center} fullwidth:{yes} height:{20cm}
+    .column alignment:{center}
+        .text {Projet de synthèse :} size:{huge} style:{italic}
+        .text {Livrable 3} size:{huge} weight:{bold}
+        .space {3}
+        .grid columns:{2} cross:{start} gap:{2cm}
+            .column cross:{start} gap:{10px}
+                .text {Enseignants :} size:{medium} weight:{bold} style:{italic}
+                .container
+                    .foreach {.teachers}
+                        name:
+                            - .name
+
+            .column cross:{start}
+                .text {Elèves :} size:{medium} weight:{bold} style:{italic}
+                .container
+                    .foreach {.docauthors}
+                        name info:
+                            - .name
+
+<<<
+
+.tableofcontents
+
+<<<
+
+# Prétraitement des données
+
+Cette semaine nous avons commencé par réaliser un prétraitement des données. Notamment,
+la création des heatmap pour entrainer le modèle de deep learning par la suite.
+
+## Prétraitement des metadonnées
+
+Premièrement, les metadonnées contenaient les scores H&Y et UPDRDS ... Ces scores
+sont en fait directement corrélé au fait que le patient soit atteint de Parkinson ou pas.
+Par conséquent la premmière passe filtre toutes les lignes qui contiennent des NaN en ayant
+déjà retiré les colonnes de scores car fuite des labels.

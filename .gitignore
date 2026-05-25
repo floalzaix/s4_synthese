@@ -1,4 +1,22 @@
+# Environnements
+**/.venv/
 **/venv/
+
+# Dossiers générés
 **/quarkdown-output/
 **/datasets/
 **/hm_*.mp4
+**/docs/
+**/datasets/
+**/output/
+
+# Pycache et modules compilés
+project/__pycache__/
+__pycache__/
+*.pyc
+*~
+
+# Traces de compilation
+*.so
+*.o
+*.class
