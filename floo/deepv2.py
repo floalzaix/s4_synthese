@@ -45,7 +45,7 @@ LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 1e-4
 
 LOG_BATCH_INTERVAL = 10
-LOG_DIR = "./floo/runs/deepv2-1"
+LOG_DIR = "./floo/runs/deepv2-2"
 MODEL_SAVE_PATH = "./floo/models/deepv2/deepv2.pt"
 
 #
@@ -413,10 +413,10 @@ class DeepV2(nn.Module):
             n += 1
 
         writer.add_scalar(
-            f"Loss/train_{tag}", np.mean(loss_tensor), epoch_num
+            "Loss/train", np.mean(loss_tensor), epoch_num
         )
         writer.add_scalar(
-            f"Accuracy/train_{tag}", corrects / total, epoch_num
+            "Accuracy/train", corrects / total, epoch_num
         )
         writer.flush()
 
@@ -518,6 +518,7 @@ def run_training(
                 writer,
                 "deepv2",
             )
+
         )
         val_loss, val_correct, val_total = model.evaluate(
             val_loader,
@@ -528,10 +529,10 @@ def run_training(
         val_acc = val_correct / val_total
 
         writer.add_scalar(
-            "Loss/val_deepv2", np.mean(val_loss), epoch
+            "Loss/val", np.mean(val_loss), epoch
         )
         writer.add_scalar(
-            "Accuracy/val_deepv2", val_acc, epoch
+            "Accuracy/val", val_acc, epoch
         )
         writer.flush()
 

@@ -61,17 +61,37 @@ ENABLE_LIVE_EPOCH_INPUT = True
 #   Model
 #
 
-# Temporal subsampling — 3000 frames @ stride 10 => 300 tokens
-TEMPORAL_STRIDE = 2
+# Must match preprocess.py (TIME_TO_KEEP * FPS)
+GAIT_FPS = 100
+GAIT_DURATION_SEC = 30
+MAX_RAW_FRAMES = GAIT_FPS * GAIT_DURATION_SEC
+
+TEMPORAL_STRIDE = 10
+
 # Frames per CNN forward chunk (limits peak VRAM on long sequences)
 FRAME_CNN_CHUNK_SIZE = 32
 EMBED_DIM = 128
 NUM_TRANSFORMER_LAYERS = 1
 NUM_ATTENTION_HEADS = 4
 TRANSFORMER_FF_DIM = 256
-MAX_SEQ_LEN = 512
 NUM_GROUPS = 8
 DROPOUT = 0.2
+
+
+def seq_len_after_stride(
+    raw_frames: int,
+    stride: int,
+) -> int:
+    """
+        Sequence length after heatmap[::stride] (ceil division).
+    """
+    if stride < 1:
+        raise ValueError("TEMPORAL_STRIDE must be >= 1")
+    return (raw_frames + stride - 1) // stride
+
+
+# Positional encoding size — tied to stride so T never exceeds max_len
+MAX_SEQ_LEN = seq_len_after_stride(MAX_RAW_FRAMES, TEMPORAL_STRIDE)
 
 #
 #   Metadata (numeric columns from preprocess.py)
@@ -167,6 +187,9 @@ class GaitDataset(Dataset[Dict[str, Any]]):
         # Processing the heatmaps
         heatmap = torch.from_numpy(heatmap).float() # type: ignore
         heatmap /= 65535.0 # uint16 to 0 1 float
+
+        # Align with preprocess window (30 s @ 100 Hz)
+        heatmap = heatmap[:MAX_RAW_FRAMES]
 
         # Pressure channel only + temporal stride (saves GPU RAM in the loader)
         heatmap = heatmap[::TEMPORAL_STRIDE, 0:1, :, :]
@@ -442,7 +465,15 @@ class PositionalEncoding(nn.Module):
     #
 
     def forward(self, x: Tensor) -> Tensor:
-        return x + self.pos_embed[:, : x.size(1), :]
+        seq_len = x.size(1)
+        max_len = self.pos_embed.size(1)
+        if seq_len > max_len:
+            raise ValueError(
+                f"Sequence length {seq_len} exceeds positional "
+                f"encoding max_len {max_len}. Increase MAX_SEQ_LEN "
+                f"(e.g. lower TEMPORAL_STRIDE)."
+            )
+        return x + self.pos_embed[:, :seq_len, :]
 
 
 class DeepV1(nn.Module):
@@ -522,7 +553,10 @@ class DeepV1(nn.Module):
             nn.Linear(fused_dim, 1),
         )
 
-        print("DeepV1 initialized !")
+        print(
+            f"DeepV1 initialized ! "
+            f"max_seq_len={max_seq_len} (stride={temporal_stride})"
+        )
 
     #
     #   Overrides
@@ -645,10 +679,10 @@ class DeepV1(nn.Module):
             n += 1
 
         writer.add_scalar(
-            f"Loss/train_{tag}", np.mean(loss_tensor), epoch_num
+            "Loss/train", np.mean(loss_tensor), epoch_num
         )
         writer.add_scalar(
-            f"Accuracy/train_{tag}", corrects / total, epoch_num
+            "Accuracy/train", corrects / total, epoch_num
         )
         writer.flush()
 
@@ -764,8 +798,8 @@ def run_training_phase(
 
         scheduler.step(mean_val_loss)
 
-        writer.add_scalar(f"Loss/val_{tag}", mean_val_loss, i + 1)
-        writer.add_scalar(f"Accuracy/val_{tag}", val_acc, i + 1)
+        writer.add_scalar("Loss/val", mean_val_loss, i + 1)
+        writer.add_scalar("Accuracy/val", val_acc, i + 1)
         writer.add_scalar(
             f"LR/{tag}",
             optimizer.param_groups[0]["lr"],
@@ -986,6 +1020,11 @@ if __name__ == "__main__":
     #
     #   Training
     #
+
+    print(
+        f"Sequence tokens per patient: ~{MAX_SEQ_LEN} "
+        f"(raw={MAX_RAW_FRAMES}, stride={TEMPORAL_STRIDE})"
+    )
 
     model = DeepV1().to(DEVICE)
     run_training(
