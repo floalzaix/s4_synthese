@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 
-from project.config import BRIDGE_FIG_DIR
-from project.viz_utils import PALETTE, save_fig, setup_style
+from gaitpdb.config import BRIDGE_FIG_DIR
+from gaitpdb.viz.utils import PALETTE, save_fig, setup_style
 
 setup_style()
 

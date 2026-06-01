@@ -31,10 +31,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
 from sklearn.model_selection import StratifiedKFold
 
-from project.config import OUTPUT_DIR, RANDOM_STATE, SESSION, XAI_FIG_DIR
-from project.features import build_feature_matrix
-from project.validate import load_stable_features
-from project.viz_utils import FIG_STD, FIG_WIDE, clean_label, save_fig, setup_style
+from gaitpdb.config import OUTPUT_DIR, RANDOM_STATE, SESSION, XAI_FIG_DIR
+from gaitpdb.features import build_feature_matrix
+from gaitpdb.validate import load_stable_features
+from gaitpdb.viz.utils import FIG_STD, FIG_WIDE, clean_label, save_fig, setup_style
 
 setup_style()
 
@@ -363,7 +363,7 @@ def run_xai_analysis(session: str = "01", df=None):
     # SHAP multi-fold analysis — enriches report with a third importance estimator
     df_shap_summary = None
     try:
-        from project.shap_analysis import run_shap_analysis  # noqa: PLC0415
+        from gaitpdb.xai.shap_analysis import run_shap_analysis  # noqa: PLC0415
         df_shap_summary = run_shap_analysis(clf_df, xai_features)
     except ImportError:
         print("  [INFO] shap non installe — section SHAP ignoree (pip install shap)")

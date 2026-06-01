@@ -26,10 +26,10 @@ import pandas as pd
 import seaborn as sns
 from scipy.interpolate import interp1d
 
-from project.config import ASYM_FIG_DIR, GAIT_FIG_DIR, SESSION
-from project.features import build_feature_matrix, segment_steps
-from project.load import load_dataset_index, load_signal_file
-from project.viz_utils import (
+from gaitpdb.config import ASYM_FIG_DIR, GAIT_FIG_DIR, SESSION
+from gaitpdb.features import build_feature_matrix, segment_steps
+from gaitpdb.load import load_dataset_index, load_signal_file
+from gaitpdb.viz.utils import (
     FIG_STD,
     FIG_WIDE,
     PALETTE,

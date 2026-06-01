@@ -5,10 +5,11 @@
 **/quarkdown-output/
 **/docs/
 **/datasets/
-**/output/
+output/
 
 # Pycache et modules compilés
-project/__pycache__/
+gaitpdb/__pycache__/
+gaitpdb/**/__pycache__/
 __pycache__/
 *.pyc
 *~

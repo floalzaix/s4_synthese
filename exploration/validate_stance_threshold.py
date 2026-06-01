@@ -17,10 +17,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from project.config import OUTPUT_DIR, REPO_ROOT
-from project.features import _FS, segment_steps
-from project.load import load_dataset_index, load_signal_file
-from project.viz_utils import save_fig, setup_style
+from gaitpdb.config import OUTPUT_DIR, REPO_ROOT
+from gaitpdb.features import _FS, segment_steps
+from gaitpdb.load import load_dataset_index, load_signal_file
+from gaitpdb.viz.utils import save_fig, setup_style
 
 setup_style()
 

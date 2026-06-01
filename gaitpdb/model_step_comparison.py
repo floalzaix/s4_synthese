@@ -24,7 +24,7 @@ Les métriques sujet-agrégées (majority vote) sont le vrai indicateur de perfo
 - scikit-learn
 - skfuzzy (optionnel — FCM)
 - torch (optionnel — CNN 1D)
-- project.step_dataset, project.config, project.viz_utils
+- gaitpdb.step_dataset, gaitpdb.config, gaitpdb.viz.utils
 """
 
 from __future__ import annotations
@@ -47,13 +47,15 @@ from sklearn.metrics import (
     f1_score,
     roc_auc_score,
 )
-from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from project.config import OUTPUT_DIR, RANDOM_STATE
-from project.step_dataset import StepDataset, SubjectSplitter
-from project.viz_utils import save_fig, setup_style
+from scipy.signal import butter, filtfilt
+
+from gaitpdb.config import OUTPUT_DIR, RANDOM_STATE
+from gaitpdb.step_dataset import StepDataset, SubjectSplitter
+from gaitpdb.viz.utils import save_fig, setup_style
 
 try:
     import skfuzzy as fuzz
@@ -78,12 +80,15 @@ setup_style()
 _STEP_OUT_DIR: Path = OUTPUT_DIR / "etude_du_pas"
 _STEP_FIG_DIR: Path = _STEP_OUT_DIR / "figures" / "model_step_comparison"
 _EPS: float = 1e-9
+_FS: float = 100.0
+_FILTER_CUTOFF: float = 10.0
+_FILTER_ORDER: int = 4
 _N_SPLITS: int = 5
 
 # Padding CNN : 1.5 s @ 100 Hz — couvre le 98e percentile de durée des pas GaitPDB.
 # Au-delà, les pas sont tronqués (représentent < 0.2% du dataset).
 _CNN_PAD_LEN: int = 150
-_CNN_EPOCHS: int = 5
+_CNN_EPOCHS: int = 20
 _CNN_BATCH: int = 128
 
 # FCM
@@ -152,6 +157,8 @@ def _compute_stride_asymmetries(steps_df: pd.DataFrame) -> pd.DataFrame:
                 "stride_asym_auc":      a_auc,
             })
 
+    if not asym_records:
+        return pd.DataFrame(columns=["stride_asym_peak", "stride_asym_duration", "stride_asym_auc"])
     asym_df = pd.DataFrame(asym_records).set_index("step_id")
     return asym_df
 
@@ -211,26 +218,40 @@ def _cv_metrics(
     }
 
 
+def _optimize_threshold_youden(y_true: np.ndarray, y_prob: np.ndarray) -> float:
+    """Trouve le seuil maximisant l'indice de Youden (J = TPR + TNR - 1)."""
+    best_j, best_t = -1.0, 0.5
+    for t in np.arange(0.10, 0.90, 0.005):
+        preds = (y_prob >= t).astype(int)
+        ba = balanced_accuracy_score(y_true, preds)
+        j = 2 * ba - 1
+        if j > best_j:
+            best_j, best_t = j, t
+    return float(best_t)
+
+
 def _aggregate_by_subject(
     subject_ids: np.ndarray,
     y_true: np.ndarray,
     y_pred: np.ndarray,
     y_prob: np.ndarray,
+    threshold: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Agrège les prédictions pas-level vers le niveau sujet.
 
     Agrégation :
-      - y_pred : majority vote (1 si > 50% des pas prédits PD)
-      - y_prob : moyenne des probabilités PD
+      - y_prob : moyenne des probabilités PD par sujet
+      - y_pred : basé sur y_prob >= threshold (seuil optimisé par Youden sur train)
       - y_true : label vrai du sujet (constant par sujet, pris en moyenne arrondie)
     """
     subj_y, subj_pred, subj_prob = [], [], []
     for subj in np.unique(subject_ids):
         mask = subject_ids == subj
         subj_y.append(round(float(y_true[mask].mean())))
-        subj_pred.append(int(y_pred[mask].mean() >= 0.5))
-        subj_prob.append(float(y_prob[mask].mean()))
+        mean_prob = float(y_prob[mask].mean())
+        subj_prob.append(mean_prob)
+        subj_pred.append(int(mean_prob >= threshold))
     return (
         np.array(subj_y, dtype=int),
         np.array(subj_pred, dtype=int),
@@ -289,12 +310,13 @@ def get_classifiers() -> dict:
         "RF": Pipeline([
             ("imp", SimpleImputer(strategy="median")),
             ("clf", RandomForestClassifier(n_estimators=200, random_state=RANDOM_STATE,
-                                           n_jobs=-1)),
+                                           class_weight="balanced", n_jobs=-1)),
         ]),
         "LogReg": Pipeline([
             ("imp",  SimpleImputer(strategy="median")),
             ("sc",   StandardScaler()),
-            ("clf",  LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)),
+            ("clf",  LogisticRegression(max_iter=1000, random_state=RANDOM_STATE,
+                                        class_weight="balanced")),
         ]),
     }
 
@@ -312,11 +334,11 @@ def run_classifier_cv(
     Retourne (cv_results, step_predictions_df).
     step_predictions_df : step_id, subject_id, y_true, y_pred, y_prob, fold.
     """
-    gkf = GroupKFold(n_splits=_N_SPLITS)
+    gkf = StratifiedGroupKFold(n_splits=_N_SPLITS, shuffle=True, random_state=RANDOM_STATE)
     cv_results: list[dict] = []
     pred_records: list[dict] = []
 
-    for fold, (tr, te) in enumerate(gkf.split(X, groups=groups), 1):
+    for fold, (tr, te) in enumerate(gkf.split(X, y, groups=groups), 1):
         clf.fit(X[tr], y[tr])
         y_pred = clf.predict(X[te])
         y_prob = _predict_proba_safe(clf, X[te])
@@ -324,9 +346,16 @@ def run_classifier_cv(
         # Métriques pas-level
         cv_results.append(_cv_metrics(y[te], y_pred, y_prob, fold, name, "step"))
 
-        # Métriques sujet-agrégées
+        # Seuil Youden optimisé sur les prédictions train agrégées par sujet
+        tr_subj_true, _, tr_subj_prob = _aggregate_by_subject(
+            groups[tr], y[tr], clf.predict(X[tr]),
+            _predict_proba_safe(clf, X[tr]),
+        )
+        opt_threshold = _optimize_threshold_youden(tr_subj_true, tr_subj_prob)
+
+        # Métriques sujet-agrégées avec seuil optimisé
         subj_true, subj_pred, subj_prob = _aggregate_by_subject(
-            groups[te], y[te], y_pred, y_prob
+            groups[te], y[te], y_pred, y_prob, threshold=opt_threshold,
         )
         cv_results.append(_cv_metrics(subj_true, subj_pred, subj_prob, fold, name, "subject"))
 
@@ -358,13 +387,13 @@ def run_kmeans_cv(
     GroupKFold CV pour KMeans (K=2).
     Les labels 0/1 sont alignés sur PD/CO par proportion de PD dans le cluster train.
     """
-    gkf = GroupKFold(n_splits=_N_SPLITS)
+    gkf = StratifiedGroupKFold(n_splits=_N_SPLITS, shuffle=True, random_state=RANDOM_STATE)
     imputer = SimpleImputer(strategy="median")
     scaler  = StandardScaler()
     cv_results: list[dict] = []
     pred_records: list[dict] = []
 
-    for fold, (tr, te) in enumerate(gkf.split(X, groups=groups), 1):
+    for fold, (tr, te) in enumerate(gkf.split(X, y, groups=groups), 1):
         X_tr = scaler.fit_transform(imputer.fit_transform(X[tr]))
         X_te = scaler.transform(imputer.transform(X[te]))
 
@@ -388,8 +417,18 @@ def run_kmeans_cv(
         y_pred = (labels_te == pd_cluster).astype(int)
 
         cv_results.append(_cv_metrics(y[te], y_pred, y_prob, fold, "KMeans", "step"))
+
+        # Seuil Youden sur train
+        labels_tr_pred = (km.labels_ == pd_cluster).astype(int)
+        dists_tr = km.transform(X_tr)
+        tr_prob = dists_tr[:, 1 - pd_cluster] / (dists_tr[:, pd_cluster] + dists_tr[:, 1 - pd_cluster] + _EPS)
+        tr_subj_true, _, tr_subj_prob = _aggregate_by_subject(
+            groups[tr], y[tr], labels_tr_pred, tr_prob,
+        )
+        opt_threshold = _optimize_threshold_youden(tr_subj_true, tr_subj_prob)
+
         subj_true, subj_pred, subj_prob = _aggregate_by_subject(
-            groups[te], y[te], y_pred, y_prob
+            groups[te], y[te], y_pred, y_prob, threshold=opt_threshold,
         )
         cv_results.append(_cv_metrics(subj_true, subj_pred, subj_prob, fold, "KMeans", "subject"))
 
@@ -425,13 +464,13 @@ def run_fcm_cv(
         print("  [FCM] skfuzzy non disponible — étape ignorée.")
         return [], pd.DataFrame()
 
-    gkf = GroupKFold(n_splits=_N_SPLITS)
+    gkf = StratifiedGroupKFold(n_splits=_N_SPLITS, shuffle=True, random_state=RANDOM_STATE)
     imputer = SimpleImputer(strategy="median")
     scaler  = StandardScaler()
     cv_results: list[dict] = []
     pred_records: list[dict] = []
 
-    for fold, (tr, te) in enumerate(gkf.split(X, groups=groups), 1):
+    for fold, (tr, te) in enumerate(gkf.split(X, y, groups=groups), 1):
         X_tr = scaler.fit_transform(imputer.fit_transform(X[tr]))
         X_te = scaler.transform(imputer.transform(X[te]))
 
@@ -449,8 +488,17 @@ def run_fcm_cv(
         y_pred = (y_prob >= 0.5).astype(int)
 
         cv_results.append(_cv_metrics(y[te], y_pred, y_prob, fold, "FCM", "step"))
+
+        # Seuil Youden sur train
+        tr_prob_fcm = u_tr[pd_cluster].astype(float)
+        tr_pred_fcm = (tr_prob_fcm >= 0.5).astype(int)
+        tr_subj_true, _, tr_subj_prob = _aggregate_by_subject(
+            groups[tr], y[tr], tr_pred_fcm, tr_prob_fcm,
+        )
+        opt_threshold = _optimize_threshold_youden(tr_subj_true, tr_subj_prob)
+
         subj_true, subj_pred, subj_prob = _aggregate_by_subject(
-            groups[te], y[te], y_pred, y_prob
+            groups[te], y[te], y_pred, y_prob, threshold=opt_threshold,
         )
         cv_results.append(_cv_metrics(subj_true, subj_pred, subj_prob, fold, "FCM", "subject"))
 
@@ -474,16 +522,25 @@ def run_fcm_cv(
 
 def _build_padded_signals(ds: StepDataset) -> np.ndarray:
     """
-    Pré-charge tous les pas en mémoire, paddés à _CNN_PAD_LEN.
+    Pré-charge tous les pas en mémoire, filtrés (Butterworth 10 Hz) et paddés à _CNN_PAD_LEN.
     Retourne un array float32 de shape (N, 16, _CNN_PAD_LEN).
     Les pas plus longs que _CNN_PAD_LEN sont tronqués (< 0.2% du dataset).
     """
-    print(f"  [CNN] Chargement des signaux bruts ({len(ds)} pas x 16 capteurs x {_CNN_PAD_LEN} samples)...")
+    nyq = _FS / 2.0
+    b, a = butter(_FILTER_ORDER, _FILTER_CUTOFF / nyq, btype="low")
+
+    print(f"  [CNN] Chargement + filtrage des signaux ({len(ds)} pas x 16 capteurs x {_CNN_PAD_LEN} samples)...")
     X = np.zeros((len(ds), 16, _CNN_PAD_LEN), dtype=np.float32)
     for i in range(len(ds)):
         sig, _, _ = ds[i]          # (T, 16)
         t = min(sig.shape[0], _CNN_PAD_LEN)
-        X[i, :, :t] = sig[:t].T   # (16, T)
+        for ch in range(16):
+            ch_data = sig[:t, ch].copy()
+            n = len(ch_data)
+            if n >= 4:
+                pl = min(3 * max(len(a), len(b)) - 1, n - 1)
+                ch_data = filtfilt(b, a, ch_data, padlen=pl).astype(np.float32)
+            X[i, ch, :t] = ch_data
     return X
 
 
@@ -501,21 +558,138 @@ if _HAS_TORCH:
                 nn.Conv1d(16, 32, kernel_size=7, padding=3),
                 nn.BatchNorm1d(32),
                 nn.ReLU(),
+                nn.Dropout(0.3),
                 nn.MaxPool1d(2),                          # -> 75
                 nn.Conv1d(32, 64, kernel_size=5, padding=2),
                 nn.BatchNorm1d(64),
                 nn.ReLU(),
+                nn.Dropout(0.3),
                 nn.MaxPool1d(2),                          # -> 37
                 nn.Conv1d(64, 64, kernel_size=3, padding=1),
                 nn.BatchNorm1d(64),
                 nn.ReLU(),
+                nn.Dropout(0.3),
                 nn.AdaptiveAvgPool1d(1),                  # -> (batch, 64, 1)
             )
-            self.classifier = nn.Linear(64, 2)
+            self.classifier = nn.Sequential(
+                nn.Dropout(0.5),
+                nn.Linear(64, 2),
+            )
 
         def forward(self, x: "torch.Tensor") -> "torch.Tensor":
             x = self.features(x).squeeze(-1)  # (batch, 64)
             return self.classifier(x)
+
+
+if _HAS_TORCH:
+    class _AugmentedDataset(TensorDataset):
+        """
+        Wrapper appliquant des augmentations on-the-fly aux signaux CNN.
+        Utilisé uniquement pendant l'entraînement.
+
+        Augmentations (p=0.5 chacune) :
+          - Amplitude scaling : *U[0.9, 1.1]
+          - Bruit gaussien : +N(0, 0.02*std_channel) par canal
+          - Time shift : décalage ±5 samples avec zéro-padding
+        """
+        def __getitem__(self, idx):
+            x, y = super().__getitem__(idx)
+            if not self.training:
+                return x, y
+            x = x.clone()
+
+            # Amplitude scaling
+            if torch.rand(1).item() > 0.5:
+                scale = 0.9 + 0.2 * torch.rand(1).item()
+                x *= scale
+
+            # Bruit gaussien
+            if torch.rand(1).item() > 0.5:
+                for ch in range(x.shape[0]):
+                    std = x[ch].std().item()
+                    if std > 1e-9:
+                        x[ch] += torch.randn_like(x[ch]) * (0.02 * std)
+
+            # Time shift
+            if torch.rand(1).item() > 0.5:
+                shift = torch.randint(-5, 6, (1,)).item()
+                if shift != 0:
+                    x_new = torch.zeros_like(x)
+                    T = x.shape[1]
+                    if shift > 0:
+                        x_new[:, shift:] = x[:, :T - shift]
+                    else:
+                        x_new[:, :T + shift] = x[:, -shift:]
+                    x = x_new
+
+            return x, y
+
+        training: bool = True
+
+
+    class _HybridCNN(nn.Module):
+        """
+        CNN hybride : branche signal (convolutions) + branche tabulaire (MLP).
+        Fusionne les deux embeddings avant la classification finale.
+        """
+        def __init__(self, n_tab_features: int) -> None:
+            super().__init__()
+            self.signal_branch = nn.Sequential(
+                nn.Conv1d(16, 32, kernel_size=7, padding=3),
+                nn.BatchNorm1d(32),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.MaxPool1d(2),
+                nn.Conv1d(32, 64, kernel_size=5, padding=2),
+                nn.BatchNorm1d(64),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.MaxPool1d(2),
+                nn.Conv1d(64, 64, kernel_size=3, padding=1),
+                nn.BatchNorm1d(64),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.AdaptiveAvgPool1d(1),
+            )
+            self.tab_branch = nn.Sequential(
+                nn.Linear(n_tab_features, 32),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(32, 32),
+                nn.ReLU(),
+            )
+            self.classifier = nn.Sequential(
+                nn.Dropout(0.5),
+                nn.Linear(64 + 32, 2),
+            )
+
+        def forward(self, x_signal: "torch.Tensor", x_tab: "torch.Tensor") -> "torch.Tensor":
+            sig_emb = self.signal_branch(x_signal).squeeze(-1)  # (batch, 64)
+            tab_emb = self.tab_branch(x_tab)                    # (batch, 32)
+            fused = torch.cat([sig_emb, tab_emb], dim=1)        # (batch, 96)
+            return self.classifier(fused)
+
+
+def _plot_training_curves(curves: dict[int, dict], model_name: str = "CNN1D") -> None:
+    """Génère un graphique des courbes train/val loss par fold CNN."""
+    n_folds = len(curves)
+    fig, axes = plt.subplots(1, n_folds, figsize=(4 * n_folds, 3.5), squeeze=False)
+    for fold_idx, (fold, data) in enumerate(sorted(curves.items())):
+        ax = axes[0, fold_idx]
+        epochs = range(1, len(data["train_loss"]) + 1)
+        ax.plot(epochs, data["train_loss"], label="Train", color="steelblue")
+        ax.plot(epochs, data["val_loss"], label="Val", color="tomato")
+        ax.axvline(data["best_epoch"], color="green", linestyle="--", alpha=0.7,
+                   label=f"Best (ep {data['best_epoch']})")
+        ax.set_title(f"Fold {fold}")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Loss")
+        ax.legend(fontsize=7)
+    fig.suptitle(f"{model_name} — Courbes d'entraînement par fold", fontsize=12)
+    fig.tight_layout()
+    fname = f"{model_name.lower()}_training_curves"
+    save_fig(fig, _STEP_FIG_DIR, fname)
+    print(f"  -> {_STEP_FIG_DIR}/{fname}.png")
 
 
 def run_cnn_cv(
@@ -525,9 +699,8 @@ def run_cnn_cv(
     steps_df: pd.DataFrame,
 ) -> tuple[list[dict], pd.DataFrame]:
     """
-    GroupKFold CV pour CNN 1D PyTorch.
+    StratifiedGroupKFold CV pour CNN 1D PyTorch avec early stopping.
     X_raw : (N, 16, T_pad) float32.
-    Entraînement : _CNN_EPOCHS epochs, batch _CNN_BATCH, Adam lr=1e-3.
     """
     if not _HAS_TORCH:
         print("  [CNN] torch non disponible — étape ignorée.")
@@ -536,30 +709,70 @@ def run_cnn_cv(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"  [CNN] Device : {device}  | {_CNN_EPOCHS} epochs / fold")
 
-    gkf = GroupKFold(n_splits=_N_SPLITS)
+    gkf = StratifiedGroupKFold(n_splits=_N_SPLITS, shuffle=True, random_state=RANDOM_STATE)
     cv_results: list[dict] = []
     pred_records: list[dict] = []
+    training_curves: dict[int, dict] = {}
 
     X_t = torch.from_numpy(X_raw)
     y_t = torch.from_numpy(y.astype(np.int64))
 
-    for fold, (tr, te) in enumerate(gkf.split(X_raw, groups=groups), 1):
+    for fold, (tr, te) in enumerate(gkf.split(X_raw, y, groups=groups), 1):
         print(f"    Fold {fold}/{_N_SPLITS}...")
         model = _StepCNN().to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
-        criterion = nn.CrossEntropyLoss()
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=_CNN_EPOCHS)
+
+        n_co = int((y[tr] == 0).sum())
+        n_pd = int((y[tr] == 1).sum())
+        n_total = n_co + n_pd
+        class_weights = torch.tensor(
+            [n_total / (2.0 * n_co + 1e-9), n_total / (2.0 * n_pd + 1e-9)],
+            dtype=torch.float32,
+        ).to(device)
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
 
         train_ds = TensorDataset(X_t[tr], y_t[tr])
         loader = DataLoader(train_ds, batch_size=_CNN_BATCH, shuffle=True)
 
-        model.train()
-        for _ in range(_CNN_EPOCHS):
+        # Petit val set pour monitoring uniquement (pas d'early stopping)
+        tr_subjects = np.unique(groups[tr])
+        rng = np.random.RandomState(RANDOM_STATE + fold)
+        rng.shuffle(tr_subjects)
+        n_val_subj = max(2, int(len(tr_subjects) * 0.15))
+        val_subjects = set(tr_subjects[:n_val_subj])
+        inner_val_mask = np.array([groups[i] in val_subjects for i in tr])
+        inner_val_idx = tr[inner_val_mask]
+
+        fold_train_losses: list[float] = []
+        fold_val_losses: list[float] = []
+
+        for epoch in range(_CNN_EPOCHS):
+            model.train()
+            epoch_loss = 0.0
+            n_batches = 0
             for xb, yb in loader:
                 xb, yb = xb.to(device), yb.to(device)
                 optimizer.zero_grad()
                 loss = criterion(model(xb), yb)
                 loss.backward()
                 optimizer.step()
+                epoch_loss += loss.item()
+                n_batches += 1
+            fold_train_losses.append(epoch_loss / max(n_batches, 1))
+            scheduler.step()
+
+            model.eval()
+            with torch.no_grad():
+                val_logits = model(X_t[inner_val_idx].to(device)).cpu()
+                val_loss = float(nn.CrossEntropyLoss()(val_logits, y_t[inner_val_idx]))
+            fold_val_losses.append(val_loss)
+
+        training_curves[fold] = {
+            "train_loss": fold_train_losses,
+            "val_loss": fold_val_losses,
+            "best_epoch": _CNN_EPOCHS,
+        }
 
         model.eval()
         with torch.no_grad():
@@ -568,8 +781,19 @@ def run_cnn_cv(
             preds  = logits.argmax(dim=1).numpy()
 
         cv_results.append(_cv_metrics(y[te], preds, probs, fold, "CNN1D", "step"))
+
+        # Seuil Youden sur prédictions train (full train, pas inner)
+        with torch.no_grad():
+            tr_logits = model(X_t[tr].to(device)).cpu()
+            tr_probs = torch.softmax(tr_logits, dim=1)[:, 1].numpy()
+            tr_preds = tr_logits.argmax(dim=1).numpy()
+        tr_subj_true, _, tr_subj_prob = _aggregate_by_subject(
+            groups[tr], y[tr], tr_preds, tr_probs,
+        )
+        opt_threshold = _optimize_threshold_youden(tr_subj_true, tr_subj_prob)
+
         subj_true, subj_pred, subj_prob = _aggregate_by_subject(
-            groups[te], y[te], preds, probs
+            groups[te], y[te], preds, probs, threshold=opt_threshold,
         )
         cv_results.append(_cv_metrics(subj_true, subj_pred, subj_prob, fold, "CNN1D", "subject"))
 
@@ -582,6 +806,176 @@ def run_cnn_cv(
                 "y_prob":     float(probs[i]),
                 "fold":       fold,
             })
+
+    # Export des courbes d'entraînement
+    _plot_training_curves(training_curves)
+
+    return cv_results, pd.DataFrame(pred_records)
+
+
+# ---------------------------------------------------------------------------
+# CNN Hybride (signal + features tabulaires)
+# ---------------------------------------------------------------------------
+
+
+def run_hybrid_cnn_cv(
+    X_raw: np.ndarray,
+    X_tab: np.ndarray,
+    y: np.ndarray,
+    groups: np.ndarray,
+    steps_df: pd.DataFrame,
+    use_augmentation: bool = True,
+) -> tuple[list[dict], pd.DataFrame]:
+    """
+    StratifiedGroupKFold CV pour CNN hybride (signal + features tabulaires).
+
+    X_raw : (N, 16, T_pad) float32 — signaux filtrés paddés.
+    X_tab : (N, n_features) float32 — features tabulaires (enrichies + capteurs).
+    """
+    if not _HAS_TORCH:
+        print("  [HybridCNN] torch non disponible — étape ignorée.")
+        return [], pd.DataFrame()
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    n_tab = X_tab.shape[1]
+    print(f"  [HybridCNN] Device : {device} | {_CNN_EPOCHS} epochs/fold | "
+          f"{n_tab} features tab | augmentation={'oui' if use_augmentation else 'non'}")
+
+    gkf = StratifiedGroupKFold(n_splits=_N_SPLITS, shuffle=True, random_state=RANDOM_STATE)
+    cv_results: list[dict] = []
+    pred_records: list[dict] = []
+    training_curves: dict[int, dict] = {}
+
+    X_sig_t = torch.from_numpy(X_raw)
+    y_t = torch.from_numpy(y.astype(np.int64))
+
+    for fold, (tr, te) in enumerate(gkf.split(X_raw, y, groups=groups), 1):
+        print(f"    Fold {fold}/{_N_SPLITS}...")
+
+        # Imputation + normalisation des features tabulaires (fit sur train)
+        imp = SimpleImputer(strategy="median")
+        scaler = StandardScaler()
+        X_tab_tr = scaler.fit_transform(imp.fit_transform(X_tab[tr]))
+        X_tab_te = scaler.transform(imp.transform(X_tab[te]))
+        X_tab_tr_t = torch.from_numpy(X_tab_tr.astype(np.float32))
+        X_tab_te_t = torch.from_numpy(X_tab_te.astype(np.float32))
+
+        model = _HybridCNN(n_tab).to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=_CNN_EPOCHS)
+
+        n_co = int((y[tr] == 0).sum())
+        n_pd = int((y[tr] == 1).sum())
+        n_total = n_co + n_pd
+        class_weights = torch.tensor(
+            [n_total / (2.0 * n_co + 1e-9), n_total / (2.0 * n_pd + 1e-9)],
+            dtype=torch.float32,
+        ).to(device)
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
+
+        if use_augmentation:
+            train_ds = _AugmentedDataset(X_sig_t[tr], y_t[tr])
+            train_ds.training = True
+        else:
+            train_ds = TensorDataset(X_sig_t[tr], y_t[tr])
+        loader = DataLoader(train_ds, batch_size=_CNN_BATCH, shuffle=True)
+
+        # Val set for monitoring
+        tr_subjects = np.unique(groups[tr])
+        rng = np.random.RandomState(RANDOM_STATE + fold)
+        rng.shuffle(tr_subjects)
+        n_val_subj = max(2, int(len(tr_subjects) * 0.15))
+        val_subjects = set(tr_subjects[:n_val_subj])
+        inner_val_mask = np.array([groups[i] in val_subjects for i in tr])
+        inner_val_local = np.where(inner_val_mask)[0]
+
+        fold_train_losses: list[float] = []
+        fold_val_losses: list[float] = []
+
+        for epoch in range(_CNN_EPOCHS):
+            model.train()
+            epoch_loss = 0.0
+            n_batches = 0
+            for batch_idx_start in range(0, len(tr), _CNN_BATCH):
+                batch_end = min(batch_idx_start + _CNN_BATCH, len(tr))
+                local_idx = list(range(batch_idx_start, batch_end))
+
+                xb_sig = X_sig_t[tr[local_idx]].to(device)
+                xb_tab = X_tab_tr_t[local_idx].to(device)
+                yb = y_t[tr[local_idx]].to(device)
+
+                if use_augmentation and torch.rand(1).item() > 0.5:
+                    scale = 0.9 + 0.2 * torch.rand(1).item()
+                    xb_sig = xb_sig * scale
+                if use_augmentation and torch.rand(1).item() > 0.5:
+                    noise_std = 0.02 * xb_sig.std(dim=-1, keepdim=True)
+                    xb_sig = xb_sig + torch.randn_like(xb_sig) * noise_std
+
+                optimizer.zero_grad()
+                loss = criterion(model(xb_sig, xb_tab), yb)
+                loss.backward()
+                optimizer.step()
+                epoch_loss += loss.item()
+                n_batches += 1
+            fold_train_losses.append(epoch_loss / max(n_batches, 1))
+            scheduler.step()
+
+            model.eval()
+            with torch.no_grad():
+                val_logits = model(
+                    X_sig_t[tr[inner_val_local]].to(device),
+                    X_tab_tr_t[inner_val_local].to(device),
+                ).cpu()
+                val_loss = float(nn.CrossEntropyLoss()(val_logits, y_t[tr[inner_val_local]]))
+            fold_val_losses.append(val_loss)
+
+        training_curves[fold] = {
+            "train_loss": fold_train_losses,
+            "val_loss": fold_val_losses,
+            "best_epoch": _CNN_EPOCHS,
+        }
+
+        model.eval()
+        with torch.no_grad():
+            logits = model(
+                X_sig_t[te].to(device),
+                X_tab_te_t.to(device),
+            ).cpu()
+            probs = torch.softmax(logits, dim=1)[:, 1].numpy()
+            preds = logits.argmax(dim=1).numpy()
+
+        cv_results.append(_cv_metrics(y[te], preds, probs, fold, "HybridCNN", "step"))
+
+        # Youden threshold on train predictions
+        with torch.no_grad():
+            tr_logits = model(
+                X_sig_t[tr].to(device),
+                X_tab_tr_t.to(device),
+            ).cpu()
+            tr_probs = torch.softmax(tr_logits, dim=1)[:, 1].numpy()
+            tr_preds = tr_logits.argmax(dim=1).numpy()
+        tr_subj_true, _, tr_subj_prob = _aggregate_by_subject(
+            groups[tr], y[tr], tr_preds, tr_probs,
+        )
+        opt_threshold = _optimize_threshold_youden(tr_subj_true, tr_subj_prob)
+
+        subj_true, subj_pred, subj_prob = _aggregate_by_subject(
+            groups[te], y[te], preds, probs, threshold=opt_threshold,
+        )
+        cv_results.append(_cv_metrics(subj_true, subj_pred, subj_prob, fold, "HybridCNN", "subject"))
+
+        for i, idx in enumerate(te):
+            pred_records.append({
+                "step_id":    steps_df.iloc[idx]["step_id"],
+                "subject_id": groups[idx],
+                "y_true":     int(y[idx]),
+                "y_pred":     int(preds[i]),
+                "y_prob":     float(probs[i]),
+                "fold":       fold,
+            })
+
+    # Export training curves
+    _plot_training_curves(training_curves, model_name="HybridCNN")
 
     return cv_results, pd.DataFrame(pred_records)
 
@@ -862,11 +1256,11 @@ def run_step_comparison(session: str = "01") -> None:
     cv_res, _ = run_fcm_cv(X, y, groups, steps_df)
     all_cv_results.extend(cv_res)
 
-    # CNN
+    # CNN 1D + Hybrid CNN
     print("  -> CNN 1D...")
+    X_raw = None
     if _HAS_TORCH:
         ds_raw = StepDataset(cache_signals=True)
-        # Filtrer sur la même session si nécessaire
         if session != "all":
             ds_raw.df = steps_df.reset_index(drop=True)
         X_raw = _build_padded_signals(ds_raw)
@@ -874,6 +1268,34 @@ def run_step_comparison(session: str = "01") -> None:
         all_cv_results.extend(cv_res)
     else:
         print("  [CNN] torch non disponible — ignoré.")
+
+    # Hybrid CNN (signal + features tabulaires enrichies + capteurs)
+    if _HAS_TORCH and X_raw is not None:
+        print("  -> Hybrid CNN (signal + tabulaire)...")
+        from gaitpdb.step_improvements import (
+            build_extended_features,
+            build_sensor_features,
+            _ENRICH_FEATURE_NAMES,
+            _SENSOR_FEATURE_NAMES,
+        )
+        print("  [HybridCNN] Construction des features enrichies + capteurs...")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            enrich_df = build_extended_features(steps_df)
+            sensor_df = build_sensor_features(steps_df, ds_raw)
+
+        # Fusionner features enrichies + capteurs
+        enrich_df = enrich_df.set_index("step_id")
+        sensor_df = sensor_df.set_index("step_id")
+        all_tab_df = enrich_df.join(sensor_df, rsuffix="_sensor")
+
+        tab_cols = [c for c in _ENRICH_FEATURE_NAMES + _SENSOR_FEATURE_NAMES
+                    if c in all_tab_df.columns]
+        X_tab = all_tab_df.reindex(columns=tab_cols).values.astype(np.float32)
+        print(f"  [HybridCNN] {len(tab_cols)} features tabulaires pour le CNN hybride")
+
+        cv_res, hybrid_preds_df = run_hybrid_cnn_cv(X_raw, X_tab, y, groups, steps_df)
+        all_cv_results.extend(cv_res)
 
     # ── 4. Export CSV résultats ──────────────────────────────────────────
     print("\n[4/6] Export des résultats CSV...")
@@ -932,6 +1354,8 @@ def run_step_comparison(session: str = "01") -> None:
     print("\n" + "=" * 60)
     print("  TERMINÉ — output/etude_du_pas/")
     print("=" * 60)
+
+    return hybrid_preds_df if "hybrid_preds_df" in dir() else None
 
 
 if __name__ == "__main__":

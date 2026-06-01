@@ -12,7 +12,7 @@ Validation finale consolidée avec reporting visuel optimisé (Publication-Ready
 - output/*.csv
 
 [DEPENDENCIES]
-- matplotlib, seaborn, sklearn, project.viz_utils
+- matplotlib, seaborn, sklearn, gaitpdb.viz.utils
 """
 
 ##
@@ -42,9 +42,9 @@ from sklearn.metrics import (
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.pipeline import Pipeline
 
-from project.config import OUTPUT_DIR, RANDOM_STATE, SESSION, VAL_FIG_DIR
-from project.features import FEATURE_COLS, STEP_FEATURES, build_feature_matrix
-from project.viz_utils import FIG_STD, FIG_WIDE, clean_label, save_fig, setup_style
+from gaitpdb.config import OUTPUT_DIR, RANDOM_STATE, SESSION, VAL_FIG_DIR
+from gaitpdb.features import FEATURE_COLS, STEP_FEATURES, build_feature_matrix
+from gaitpdb.viz.utils import FIG_STD, FIG_WIDE, clean_label, save_fig, setup_style
 
 setup_style()
 

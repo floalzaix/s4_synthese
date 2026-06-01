@@ -9,7 +9,7 @@ Ce fichier contient les fonctions d'extraction de caractéristiques (features) �
 - Construire la matrice de caractéristiques pour l'ensemble du dataset.
 
 [INPUTS]
-- DataFrame des signaux temporels (provenant de project.load).
+- DataFrame des signaux temporels (provenant de gaitpdb.load).
 
 [OUTPUTS]
 - Dictionnaires de caractéristiques.
@@ -27,7 +27,7 @@ Ce fichier contient les fonctions d'extraction de caractéristiques (features) �
 - numpy
 - pandas
 - scipy.signal
-- project.load
+- gaitpdb.load
 """
 
 ##
@@ -44,7 +44,7 @@ import numpy as np
 import pandas as pd
 from scipy.signal import find_peaks
 
-from project.load import load_dataset_index, load_signal_file
+from gaitpdb.load import load_dataset_index, load_signal_file
 
 # np.trapezoid introduced in NumPy 2.0; np.trapz removed in NumPy 2.2+.
 # getattr default is evaluated eagerly, so we use try/except to avoid AttributeError.

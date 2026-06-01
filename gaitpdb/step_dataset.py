@@ -25,7 +25,7 @@ from typing import Generator, Optional
 import numpy as np
 import pandas as pd
 
-from project.config import OUTPUT_DIR, REPO_ROOT
+from gaitpdb.config import OUTPUT_DIR, REPO_ROOT
 
 # Colonnes des 16 capteurs individuels (ordre fixe, stable entre appels)
 _SENSOR_COLS: list[str] = [f"L{i}" for i in range(1, 9)] + [f"R{i}" for i in range(1, 9)]
@@ -48,7 +48,7 @@ def _load_sensor_array(filepath: Path) -> np.ndarray:
     Lit un fichier signal et retourne uniquement les 16 colonnes capteurs,
     sous forme de tableau numpy float32 de shape (N, 16).
     """
-    from project.load import load_signal_file
+    from gaitpdb.load import load_signal_file
 
     sig = load_signal_file(filepath)
     return sig[_SENSOR_COLS].to_numpy(dtype=np.float32)
@@ -84,7 +84,7 @@ class StepDataset:
         if not csv_path.exists():
             raise FileNotFoundError(
                 f"steps.csv introuvable : {csv_path}\n"
-                "Exécuter d'abord : python -m project.build_steps_index"
+                "Exécuter d'abord : python -m gaitpdb.build_steps_index"
             )
 
         df = pd.read_csv(csv_path)
@@ -265,19 +265,21 @@ class SubjectSplitter:
 
     def __init__(self, dataset: StepDataset) -> None:
         self.groups: np.ndarray = dataset.df["subject_id"].to_numpy(dtype=object)
+        self.labels: np.ndarray = (dataset.df["group"] == "PD").astype(int).to_numpy()
 
     def split(
         self, n_splits: int = 5
     ) -> Generator[tuple[np.ndarray, np.ndarray], None, None]:
         """
         Yield (train_indices, val_indices) pour chaque fold.
-        Nécessite scikit-learn.
+        Utilise StratifiedGroupKFold pour garantir l'équilibre PD/CO entre folds.
         """
-        from sklearn.model_selection import GroupKFold
+        from sklearn.model_selection import StratifiedGroupKFold
 
-        gkf = GroupKFold(n_splits=n_splits)
-        dummy = np.zeros(len(self.groups))
-        for train_idx, val_idx in gkf.split(dummy, groups=self.groups):
+        gkf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=42)
+        for train_idx, val_idx in gkf.split(
+            np.zeros(len(self.groups)), self.labels, groups=self.groups
+        ):
             yield train_idx, val_idx
 
     def train_val_split(

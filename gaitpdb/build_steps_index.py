@@ -21,9 +21,9 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from project.config import OUTPUT_DIR, REPO_ROOT
-from project.features import _EPS, _FS, _trapz, segment_steps
-from project.load import load_dataset_index, load_signal_file
+from gaitpdb.config import OUTPUT_DIR, REPO_ROOT
+from gaitpdb.features import _EPS, _FS, _trapz, segment_steps
+from gaitpdb.load import load_dataset_index, load_signal_file
 
 # Un pas est considéré "de bord" si son début ou sa fin est à moins de N samples
 # du début ou de la fin du signal (pas potentiellement tronqué).

@@ -42,8 +42,8 @@ try:
 except ImportError:
     HAS_SHAP = False
 
-from project.config import OUTPUT_DIR, RANDOM_STATE, SHAP_FIG_DIR
-from project.viz_utils import clean_label, save_fig, setup_style
+from gaitpdb.config import OUTPUT_DIR, RANDOM_STATE, SHAP_FIG_DIR
+from gaitpdb.viz.utils import clean_label, save_fig, setup_style
 
 setup_style()
 
@@ -289,8 +289,8 @@ def run_shap_analysis(
 
 
 if __name__ == "__main__":
-    from project.features import build_feature_matrix
-    from project.validate import load_stable_features
+    from gaitpdb.features import build_feature_matrix
+    from gaitpdb.validate import load_stable_features
 
     _df = build_feature_matrix(session="01")
     _feats = load_stable_features(min_freq=0.6)

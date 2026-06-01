@@ -18,9 +18,9 @@ import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 
-from project.config import REPO_ROOT, SEG_FIG_DIR
-from project.load import load_signal_file
-from project.viz_utils import FIG_WIDE, save_fig, setup_style
+from gaitpdb.config import REPO_ROOT, SEG_FIG_DIR
+from gaitpdb.load import load_signal_file
+from gaitpdb.viz.utils import FIG_WIDE, save_fig, setup_style
 
 setup_style()
 
@@ -273,12 +273,12 @@ def main() -> None:
     out_dir = SEG_FIG_DIR
 
     print("Chargement de steps.csv...")
-    from project.config import OUTPUT_DIR
+    from gaitpdb.config import OUTPUT_DIR
     steps_path = OUTPUT_DIR / "steps.csv"
     if not steps_path.exists():
         raise FileNotFoundError(
             f"steps.csv introuvable : {steps_path}\n"
-            "Executer d'abord : python -m project.build_steps_index"
+            "Executer d'abord : python -m gaitpdb.build_steps_index"
         )
     steps_df = pd.read_csv(steps_path)
 

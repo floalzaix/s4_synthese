@@ -14,7 +14,7 @@ Comparaison exhaustive de multiples algorithmes de ML classés par familles.
 [DEPENDENCIES]
 - scikit-learn
 - xgboost, lightgbm, catboost (optionnels)
-- project.config, project.features, project.validate, project.viz_utils
+- gaitpdb.config, gaitpdb.features, gaitpdb.validate, gaitpdb.viz.utils
 """
 
 ##
@@ -45,10 +45,10 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC, LinearSVC
 
-from project.config import MODEL_FIG_DIR, OUTPUT_DIR, RANDOM_STATE
-from project.features import build_feature_matrix
-from project.validate import FINAL_FEATURES
-from project.viz_utils import save_fig, setup_style
+from gaitpdb.config import MODEL_FIG_DIR, OUTPUT_DIR, RANDOM_STATE
+from gaitpdb.features import build_feature_matrix
+from gaitpdb.validate import FINAL_FEATURES
+from gaitpdb.viz.utils import save_fig, setup_style
 
 
 def get_external_boosters():

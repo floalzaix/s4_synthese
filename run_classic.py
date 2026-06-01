@@ -11,24 +11,22 @@ Point d'entrée principal du projet gaitpdb - Reporting Visuel Complet.
 - Générer l'atlas visuel complet (XAI, Segmentation, Gait Profiles).
 
 [DEPENDENCIES]
-- project.*
+- gaitpdb.*
 """
 
 from __future__ import annotations
 
-import project.feature_reduction
-import project.fuzzy_clustering
-import project.model_comparison
-import project.patient_clustering
-import project.step_qc
-import project.validate
-import project.visual_check
-import project.viz_advanced
-import project.viz_bridge
-import project.xai
-
-from project.config import SESSION
-from project.features import build_feature_matrix
+import gaitpdb.feature_reduction
+import gaitpdb.clustering
+import gaitpdb.model_comparison
+import gaitpdb.qc.step_qc
+import gaitpdb.validate
+import gaitpdb.qc.visual_check
+import gaitpdb.viz.advanced
+import gaitpdb.viz.conceptual
+import gaitpdb.xai.importance
+from gaitpdb.config import SESSION
+from gaitpdb.features import build_feature_matrix
 
 
 def main():
@@ -44,52 +42,52 @@ def main():
 
     # 1. Validation Finale (K-Fold, LOSO, Métriques)
     print("[1/10] Exécution de la Validation Finale...")
-    project.validate.run_validation(df=df)
+    gaitpdb.validate.run_validation(df=df)
     print("OK.\n")
 
     # 2. Comparaison Multi-Algorithmes
     print("[2/10] Comparaison des algorithmes (Benchmarking)...")
-    project.model_comparison.run_model_comparison(df=df)
+    gaitpdb.model_comparison.run_model_comparison(df=df)
     print("OK.\n")
 
     # 3. Clustering & Projections
     print("[3/10] Analyse de Clustering et Projections (PCA/t-SNE)...")
-    project.patient_clustering.run_patient_clustering(df=df)
+    gaitpdb.clustering.run_patient_clustering(df=df)
     print("OK.\n")
 
     # 4. Fuzzy Clustering
     print("[4/10] Analyse Fuzzy Clustering (Appartenance Graduelle)...")
-    project.fuzzy_clustering.run_final_fuzzy(df=df)
+    gaitpdb.clustering.run_final_fuzzy(df=df)
     print("OK.\n")
 
     # 5. Réduction de Features (Phase 4 — trade-off performance/interprétabilité)
     print("[5/10] Réduction de l'espace des features (Phase 4)...")
-    project.feature_reduction.run_phase4(df=df)
+    gaitpdb.feature_reduction.run_phase4(df=df)
     print("OK.\n")
 
     # 6. XAI (Importance, Distributions, Corrélations)
     print("[6/10] Génération du rapport XAI...")
-    project.xai.run_xai_analysis(df=df)
+    gaitpdb.xai.importance.run_xai_analysis(df=df)
     print("OK.\n")
 
     # 7. Contrôle Qualité Segmentation (Detailed Plots)
     print("[7/10] Génération du contrôle qualité segmentation...")
-    project.visual_check.main()
+    gaitpdb.qc.visual_check.main()
     print("OK.\n")
 
     # 8. Visualisations Avancées (Profiles, Heatmaps)
     print("[8/10] Génération des profils et heatmaps d'asymétrie...")
-    project.viz_advanced.main(df=df)
+    gaitpdb.viz.advanced.main(df=df)
     print("OK.\n")
 
     # 9. Schémas Conceptuels
     print("[9/10] Génération des schémas conceptuels...")
-    project.viz_bridge.main()
+    gaitpdb.viz.conceptual.main()
     print("OK.\n")
 
     # 10. QC visuel des pas pd_mismatch et high_asym (step-level)
     print("[10/10] QC visuel des pas anomaliques (pd_mismatch / high_asym)...")
-    project.step_qc.main()
+    gaitpdb.qc.step_qc.main()
     print("OK.\n")
 
     print("==========================================================")

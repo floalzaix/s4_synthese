@@ -16,7 +16,7 @@ Phase 4 : Réduction de l'espace des features et analyse de stabilité.
 
 [DEPENDENCIES]
 - scikit-learn, pandas, numpy, seaborn, matplotlib
-- project.config, project.features, project.validate, project.viz_utils
+- gaitpdb.config, gaitpdb.features, gaitpdb.validate, gaitpdb.viz.utils
 """
 
 ##
@@ -41,10 +41,10 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import StratifiedKFold
 
-from project.config import OUTPUT_DIR, RANDOM_STATE, SESSION, VAL_FIG_DIR, XAI_FIG_DIR
-from project.features import build_feature_matrix
-from project.validate import FINAL_FEATURES
-from project.viz_utils import clean_label, save_fig, setup_style
+from gaitpdb.config import OUTPUT_DIR, RANDOM_STATE, SESSION, VAL_FIG_DIR, XAI_FIG_DIR
+from gaitpdb.features import build_feature_matrix
+from gaitpdb.validate import FINAL_FEATURES
+from gaitpdb.viz.utils import clean_label, save_fig, setup_style
 
 setup_style()
 

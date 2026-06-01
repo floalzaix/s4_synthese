@@ -15,7 +15,7 @@ QC visuel des pas identifiés comme "pd_mismatch" ou "high_asym" par model_step_
 - output/etude_du_pas/step_qc_summary.csv
 
 [DEPENDENCIES]
-- project.config, project.load, project.viz_utils
+- gaitpdb.config, gaitpdb.load, gaitpdb.viz.utils
 - output/steps.csv
 - output/etude_du_pas/focus_malades_premiers_pas.csv  (généré par model_step_comparison.py)
 """
@@ -30,9 +30,9 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from project.config import OUTPUT_DIR, REPO_ROOT, STEP_QC_FIG_DIR
-from project.load import load_signal_file
-from project.viz_utils import FIG_LARGE, FIG_WIDE, save_fig, setup_style
+from gaitpdb.config import OUTPUT_DIR, REPO_ROOT, STEP_QC_FIG_DIR
+from gaitpdb.load import load_signal_file
+from gaitpdb.viz.utils import FIG_LARGE, FIG_WIDE, save_fig, setup_style
 
 setup_style()
 
@@ -372,7 +372,7 @@ def main() -> None:
     if not focus_path.exists():
         print(
             f"[step_qc] {focus_path} introuvable.\n"
-            "  -> Exécuter d'abord : python -m project.model_step_comparison"
+            "  -> Exécuter d'abord : python -m gaitpdb.model_step_comparison"
         )
         return
 
