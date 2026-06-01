@@ -49,8 +49,8 @@ BATCH_SIZE = 1
 NUM_DATALOADER_WORKERS = 0
 PIN_MEMORY = False
 EPOCHS = 20
-LEARNING_RATE = 5e-5
-WEIGHT_DECAY = 1e-4
+LEARNING_RATE = 0.00005
+WEIGHT_DECAY = 0.0001
 MAX_GRAD_NORM = 1.0
 EARLY_STOP_PATIENCE = 5
 LR_SCHEDULER_FACTOR = 0.5
@@ -62,7 +62,7 @@ ENABLE_LIVE_EPOCH_INPUT = True
 #
 
 # Temporal subsampling — 3000 frames @ stride 10 => 300 tokens
-TEMPORAL_STRIDE = 10
+TEMPORAL_STRIDE = 2
 # Frames per CNN forward chunk (limits peak VRAM on long sequences)
 FRAME_CNN_CHUNK_SIZE = 32
 EMBED_DIM = 128
@@ -71,7 +71,7 @@ NUM_ATTENTION_HEADS = 4
 TRANSFORMER_FF_DIM = 256
 MAX_SEQ_LEN = 512
 NUM_GROUPS = 8
-DROPOUT = 0.4
+DROPOUT = 0.2
 
 #
 #   Metadata (numeric columns from preprocess.py)
