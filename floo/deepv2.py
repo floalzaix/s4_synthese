@@ -34,15 +34,10 @@ BATCH_SIZE = 1
 
 SEED = 42
 
-# Temporal subsampling  3000 frames @ stride 10 => 300 tokens
+# Temporal subsampling  3000 frames @ stride 10 => 300 depth
 TEMPORAL_STRIDE = 10
 
-EMBED_DIM = 256
-NUM_TRANSFORMER_LAYERS = 2
-NUM_ATTENTION_HEADS = 4
-TRANSFORMER_FF_DIM = 512
-MAX_SEQ_LEN = 512
-
+FEATURE_DIM = 256
 DROPOUT = 0.3
 
 EPOCHS = 20
@@ -50,8 +45,8 @@ LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 1e-4
 
 LOG_BATCH_INTERVAL = 10
-LOG_DIR = "./floo/runs/deepv1-1"
-MODEL_SAVE_PATH = "./floo/models/deepv1/deepv1.pt"
+LOG_DIR = "./floo/runs/deepv2-1"
+MODEL_SAVE_PATH = "./floo/models/deepv2/deepv2.pt"
 
 #
 #   Dataloading
@@ -134,22 +129,23 @@ def collate_gait_batch(
 #   Model definition
 #
 
-class ResidualBlock(nn.Module):
+class ResidualBlock3D(nn.Module):
     """
-        Residual block from the ResNet paper.
+        Residual block with 3D convolutions for spatiotemporal
+        feature extraction.
     """
 
     def __init__(self, channels: int):
         super().__init__()
 
-        self.conv1 = nn.Conv2d(
+        self.conv1 = nn.Conv3d(
             channels, channels, kernel_size=3, padding=1, bias=False
         )
-        self.bn1 = nn.BatchNorm2d(channels)
-        self.conv2 = nn.Conv2d(
+        self.bn1 = nn.BatchNorm3d(channels)
+        self.conv2 = nn.Conv3d(
             channels, channels, kernel_size=3, padding=1, bias=False
         )
-        self.bn2 = nn.BatchNorm2d(channels)
+        self.bn2 = nn.BatchNorm3d(channels)
 
     #
     #   Overrides
@@ -170,63 +166,100 @@ class ResidualBlock(nn.Module):
         return out
 
 
-class FrameEncoder(nn.Module):
+class VolumeEncoder3D(nn.Module):
     """
-        CNN backbone that maps one heatmap frame to a fixed-size
-        embedding vector.
+        3D CNN backbone that maps a gait heatmap volume to a
+        fixed-size feature vector.
 
         Params:
-            - embed_dim: Output feature dimension.
+            - feature_dim: Output feature dimension.
 
         Inputs:
-            - x: Tensor of shape (N, 1, H, W)
+            - x: Tensor of shape (N, 1, T, H, W)
 
         Outputs:
-            - features: Tensor of shape (N, embed_dim)
+            - features: Tensor of shape (N, feature_dim)
     """
 
-    def __init__(self, embed_dim: int):
+    def __init__(self, feature_dim: int):
         super().__init__()
 
-        # Stem — 224 -> 56
+        # Stem — spatial 224 -> 56, temporal depth preserved
         self.stem = nn.Sequential(
-            nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False),
-            nn.BatchNorm2d(64),
+            nn.Conv3d(
+                1,
+                64,
+                kernel_size=(3, 7, 7),
+                stride=(1, 2, 2),
+                padding=(1, 3, 3),
+                bias=False,
+            ),
+            nn.BatchNorm3d(64),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            nn.MaxPool3d(
+                kernel_size=(1, 3, 3),
+                stride=(1, 2, 2),
+                padding=(0, 1, 1),
+            ),
         )
 
         self.layer1 = nn.Sequential(
-            ResidualBlock(64),
-            ResidualBlock(64),
+            ResidualBlock3D(64),
+            ResidualBlock3D(64),
         )
 
-        # 56 -> 28
+        # Spatiotemporal down — T/2, H/2, W/2
         self.down1 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(128),
+            nn.Conv3d(
+                64,
+                128,
+                kernel_size=3,
+                stride=(2, 2, 2),
+                padding=1,
+                bias=False,
+            ),
+            nn.BatchNorm3d(128),
             nn.ReLU(inplace=True),
         )
         self.layer2 = nn.Sequential(
-            ResidualBlock(128),
-            ResidualBlock(128),
+            ResidualBlock3D(128),
+            ResidualBlock3D(128),
         )
 
-        # 28 -> 14
+        # Spatial down only — H/2, W/2
         self.down2 = nn.Sequential(
-            nn.Conv2d(
-                128, 256, kernel_size=3, stride=2, padding=1, bias=False
+            nn.Conv3d(
+                128,
+                256,
+                kernel_size=3,
+                stride=(1, 2, 2),
+                padding=1,
+                bias=False,
             ),
-            nn.BatchNorm2d(256),
+            nn.BatchNorm3d(256),
             nn.ReLU(inplace=True),
         )
         self.layer3 = nn.Sequential(
-            ResidualBlock(256),
-            ResidualBlock(256),
+            ResidualBlock3D(256),
+            ResidualBlock3D(256),
         )
 
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.head = nn.Linear(256, embed_dim)
+        # Temporal down — T/2
+        self.down3 = nn.Sequential(
+            nn.Conv3d(
+                256,
+                256,
+                kernel_size=3,
+                stride=(2, 1, 1),
+                padding=1,
+                bias=False,
+            ),
+            nn.BatchNorm3d(256),
+            nn.ReLU(inplace=True),
+        )
+
+        self.pool = nn.AdaptiveAvgPool3d((1, 1, 1))
+        self.head = nn.Linear(256, feature_dim)
 
     #
     #   Overrides
@@ -239,39 +272,17 @@ class FrameEncoder(nn.Module):
         x = self.layer2(x)
         x = self.down2(x)
         x = self.layer3(x)
+        x = self.down3(x)
         x = self.pool(x).flatten(1)
         return self.head(x)
 
 
-class PositionalEncoding(nn.Module):
+class DeepV2(nn.Module):
     """
-        Learned positional embeddings for the temporal transformer.
-
-        Params:
-            - embed_dim: Feature dimension.
-            - max_len: Maximum sequence length after subsampling.
-    """
-
-    def __init__(self, embed_dim: int, max_len: int):
-        super().__init__()
-
-        self.pos_embed = nn.Parameter(torch.zeros(1, max_len, embed_dim))
-        nn.init.trunc_normal_(self.pos_embed, std=0.02)
-
-    #
-    #   Overrides
-    #
-
-    def forward(self, x: Tensor) -> Tensor:
-        return x + self.pos_embed[:, : x.size(1), :]
-
-
-class DeepV1(nn.Module):
-    """
-        The model is a simple convolutional neural network
-        that takes in a heatmap and then go through a time
-        transformer block to extract time data and outputs
-        a classification of the patient being 0 or 1 (PD or CO).
+        End-to-end 3D CNN for binary gait classification.
+        Spatiotemporal patterns are learned directly from the
+        heatmap volume without a per-frame 2D encoder or
+        temporal transformer.
 
         Inputs:
             - heatmap: Tensor of shape (batch_size, T, C, H, W)
@@ -288,39 +299,22 @@ class DeepV1(nn.Module):
     def __init__(
         self,
         *,
-        embed_dim: int = EMBED_DIM,
+        feature_dim: int = FEATURE_DIM,
         temporal_stride: int = TEMPORAL_STRIDE,
-        num_layers: int = NUM_TRANSFORMER_LAYERS,
-        num_heads: int = NUM_ATTENTION_HEADS,
-        ff_dim: int = TRANSFORMER_FF_DIM,
         dropout: float = DROPOUT,
-        max_seq_len: int = MAX_SEQ_LEN,
     ):
         super().__init__()
 
         self.temporal_stride = temporal_stride
-        self.frame_encoder = FrameEncoder(embed_dim)
-        self.pos_encoding = PositionalEncoding(embed_dim, max_seq_len)
-
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=embed_dim,
-            nhead=num_heads,
-            dim_feedforward=ff_dim,
-            dropout=dropout,
-            batch_first=True,
-        )
-        self.temporal_transformer = nn.TransformerEncoder(
-            encoder_layer,
-            num_layers=num_layers,
-        )
+        self.volume_encoder = VolumeEncoder3D(feature_dim)
 
         self.classifier = nn.Sequential(
-            nn.LayerNorm(embed_dim),
+            nn.LayerNorm(feature_dim),
             nn.Dropout(dropout),
-            nn.Linear(embed_dim, 1),
+            nn.Linear(feature_dim, 1),
         )
 
-        print("DeepV1 initialized !")
+        print("DeepV2 initialized !")
 
     #
     #   Overrides
@@ -336,26 +330,18 @@ class DeepV1(nn.Module):
             Returns:
                 Logits of shape (B,) for binary classification.
         """
+        
         # Keeping only the pressure intensity channel
         x = heatmap[:, :, 0:1, :, :]
 
         # Subsampling the temporal axis to reduce memory usage
         x = x[:, :: self.temporal_stride, :, :, :]
 
-        batch_size, seq_len, _, height, width = x.shape
+        # (B, T, 1, H, W) -> (B, 1, T, H, W) for Conv3d
+        x = x.permute(0, 2, 1, 3, 4)
 
-        # Flattening time into the batch dimension for the CNN
-        x = x.reshape(batch_size * seq_len, 1, height, width)
-        features = self.frame_encoder(x)
-        features = features.reshape(batch_size, seq_len, -1)
-
-        # Temporal transformer over frame embeddings
-        features = self.pos_encoding(features)
-        encoded = self.temporal_transformer(features)
-
-        # Global average pooling over time
-        pooled = encoded.mean(dim=1)
-        logits = self.classifier(pooled).squeeze(-1)
+        features = self.volume_encoder(x)
+        logits = self.classifier(features).squeeze(-1)
         return logits
 
     #
@@ -488,7 +474,7 @@ class DeepV1(nn.Module):
 #
 
 def run_training(
-    model: DeepV1,
+    model: DeepV2,
     train_loader: DataLoader[Dict[str, Tensor]],
     val_loader: DataLoader[Dict[str, Tensor]],
     *,
@@ -501,7 +487,7 @@ def run_training(
         Full training loop with TensorBoard logging.
 
         Params:
-            - model: DeepV1 instance already on DEVICE.
+            - model: DeepV2 instance already on DEVICE.
             - train_loader: Training DataLoader.
             - val_loader: Validation DataLoader.
             - epochs: Number of training epochs.
@@ -530,7 +516,7 @@ def run_training(
                 criterion,
                 epoch,
                 writer,
-                "deepv1",
+                "deepv2",
             )
         )
         val_loss, val_correct, val_total = model.evaluate(
@@ -542,10 +528,10 @@ def run_training(
         val_acc = val_correct / val_total
 
         writer.add_scalar(
-            "Loss/val_deepv1", np.mean(val_loss), epoch
+            "Loss/val_deepv2", np.mean(val_loss), epoch
         )
         writer.add_scalar(
-            "Accuracy/val_deepv1", val_acc, epoch
+            "Accuracy/val_deepv2", val_acc, epoch
         )
         writer.flush()
 
@@ -606,5 +592,5 @@ if __name__ == "__main__":
     #   Training
     #
 
-    model = DeepV1().to(DEVICE)
+    model = DeepV2().to(DEVICE)
     run_training(model, trainloader, validationloader)
