@@ -49,7 +49,7 @@ BATCH_SIZE = 1
 NUM_DATALOADER_WORKERS = 0
 PIN_MEMORY = False
 EPOCHS = 20
-LEARNING_RATE = 5e-5
+LEARNING_RATE = 2e-4
 WEIGHT_DECAY = 1e-4
 MAX_GRAD_NORM = 1.0
 EARLY_STOP_PATIENCE = 5
@@ -63,19 +63,19 @@ ENABLE_LIVE_EPOCH_INPUT = True
 
 # Must match preprocess.py (TIME_TO_KEEP * FPS)
 GAIT_FPS = 100
-GAIT_DURATION_SEC = 30
+GAIT_DURATION_SEC = 5
 MAX_RAW_FRAMES = GAIT_FPS * GAIT_DURATION_SEC
 
 TEMPORAL_STRIDE = 10
 
 # Frames per CNN forward chunk (limits peak VRAM on long sequences)
-FRAME_CNN_CHUNK_SIZE = 32
-EMBED_DIM = 128
+FRAME_CNN_CHUNK_SIZE = 16
+EMBED_DIM = 64
 NUM_TRANSFORMER_LAYERS = 1
 NUM_ATTENTION_HEADS = 4
-TRANSFORMER_FF_DIM = 256
+TRANSFORMER_FF_DIM = 128
 NUM_GROUPS = 8
-DROPOUT = 0.4
+DROPOUT = 0.2
 
 
 def seq_len_after_stride(
@@ -105,7 +105,7 @@ METADATA_COLS = [
     "Speed_01 (m/sec)",
 ]
 N_METADATA = len(METADATA_COLS)
-METADATA_EMBED_DIM = 32
+METADATA_EMBED_DIM = 16
 
 #
 #   Logging and checkpoints
@@ -447,7 +447,7 @@ class FrameEncoder(nn.Module):
 
 class PositionalEncoding(nn.Module):
     """
-        Learned positional embeddings for the temporal transformer.
+        Sinusoidal positional embeddings for the temporal transformer.
 
         Params:
             - embed_dim: Feature dimension.
@@ -457,8 +457,17 @@ class PositionalEncoding(nn.Module):
     def __init__(self, embed_dim: int, max_len: int):
         super().__init__()
 
-        self.pos_embed = nn.Parameter(torch.zeros(1, max_len, embed_dim))
-        nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        # Fixed sinusoidal table (no learned temporal encoding)
+        positions = torch.arange(max_len, dtype=torch.float32).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, embed_dim, 2, dtype=torch.float32)
+            * (-np.log(10000.0) / embed_dim)
+        )
+
+        pe = torch.zeros(max_len, embed_dim, dtype=torch.float32)
+        pe[:, 0::2] = torch.sin(positions * div_term)
+        pe[:, 1::2] = torch.cos(positions * div_term)
+        self.register_buffer("pos_embed_table", pe.unsqueeze(0), persistent=False)
 
     #
     #   Overrides
@@ -466,14 +475,14 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         seq_len = x.size(1)
-        max_len = self.pos_embed.size(1)
+        max_len = self.pos_embed_table.size(1)
         if seq_len > max_len:
             raise ValueError(
                 f"Sequence length {seq_len} exceeds positional "
                 f"encoding max_len {max_len}. Increase MAX_SEQ_LEN "
                 f"(e.g. lower TEMPORAL_STRIDE)."
             )
-        return x + self.pos_embed[:, :seq_len, :]
+        return x + self.pos_embed_table[:, :seq_len, :]
 
 
 class DeepV1(nn.Module):
