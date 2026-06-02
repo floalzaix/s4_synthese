@@ -53,6 +53,7 @@ LEARNING_RATE = 0.0002
 WEIGHT_DECAY = 0.0001
 MAX_GRAD_NORM = 1.0
 EARLY_STOP_PATIENCE = 5
+BEST_MIN_DELTA = 1e-3
 LR_SCHEDULER_FACTOR = 0.5
 LR_SCHEDULER_PATIENCE = 2
 ENABLE_LIVE_EPOCH_INPUT = True
@@ -831,11 +832,15 @@ def run_training_phase(
         #   Early stopping — keep best val checkpoint
         #
 
-        if mean_val_loss < best_val_loss:
+        # Keep a best checkpoint only when improvement is meaningful
+        if (best_val_loss - mean_val_loss) > BEST_MIN_DELTA:
             best_val_loss = mean_val_loss
             patience_counter = 0
             model.save(BEST_MODEL_PATH)
-            print(" New best val loss — checkpoint updated.")
+            print(
+                f" New best val loss (< -{BEST_MIN_DELTA:.1e}) "
+                "— checkpoint updated."
+            )
         else:
             patience_counter += 1
             print(
