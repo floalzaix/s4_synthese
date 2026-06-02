@@ -1,4 +1,4 @@
-pandas==3.0.3
-torch==2.11.0
-numpy==2.4.6
-tensorboard==2.20.0
+pandas
+torch
+numpy
+tensorboard
