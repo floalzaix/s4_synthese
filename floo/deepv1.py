@@ -36,7 +36,7 @@ DATA_PATH = "datasets/gait-in-parkinsons-disease-1.0.0/preprocessed/"
 #   Split
 #
 
-SPLIT_MODE = "stratified"
+SPLIT_MODE = "study"
 HOLDOUT_STUDY = "Ju"
 TRAIN_VALIDATION_RATIO = 0.8
 SEED = 42
@@ -45,13 +45,13 @@ SEED = 42
 #   Training hyperparameters
 #
 
-BATCH_SIZE = 1
-NUM_DATALOADER_WORKERS = 0
-PIN_MEMORY = False
+BATCH_SIZE = 2
+NUM_DATALOADER_WORKERS = 4
+PIN_MEMORY = True
 EPOCHS = 20
-LEARNING_RATE = 0.0002
-WEIGHT_DECAY = 0.0001
-MAX_GRAD_NORM = 1.0
+LEARNING_RATE = 0.001
+WEIGHT_DECAY = 0.0002
+MAX_GRAD_NORM = 0
 EARLY_STOP_PATIENCE = 5
 LR_SCHEDULER_FACTOR = 0.5
 LR_SCHEDULER_PATIENCE = 2
@@ -66,10 +66,10 @@ GAIT_FPS = 100
 GAIT_DURATION_SEC = 5
 MAX_RAW_FRAMES = GAIT_FPS * GAIT_DURATION_SEC
 
-TEMPORAL_STRIDE = 10
+TEMPORAL_STRIDE = 1
 
 # Frames per CNN forward chunk (limits peak VRAM on long sequences)
-FRAME_CNN_CHUNK_SIZE = 16
+FRAME_CNN_CHUNK_SIZE = 32
 EMBED_DIM = 64
 NUM_TRANSFORMER_LAYERS = 1
 NUM_ATTENTION_HEADS = 4
@@ -111,8 +111,8 @@ METADATA_EMBED_DIM = 16
 #   Logging and checkpoints
 #
 
-LOG_BATCH_INTERVAL = 10
-LOG_DIR = "./floo/runs/deepv1-2"
+LOG_BATCH_INTERVAL = 2
+LOG_DIR = "./floo/runs/deepv1-3"
 MODEL_SAVE_PATH = "./floo/models/deepv1/deepv1.pt"
 BEST_MODEL_PATH = "./floo/models/deepv1/deepv1_best.pt"
 
@@ -186,7 +186,7 @@ class GaitDataset(Dataset[Dict[str, Any]]):
 
         # Processing the heatmaps
         heatmap = torch.from_numpy(heatmap).float() # type: ignore
-        heatmap /= 65535.0 # uint16 to 0 1 float
+        # heatmap /= 65535.0 # uint16 to 0 1 float
 
         # Align with preprocess window (30 s @ 100 Hz)
         heatmap = heatmap[:MAX_RAW_FRAMES]
