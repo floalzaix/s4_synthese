@@ -57,10 +57,11 @@ L'analyse opere au **niveau du pas** (60 439 pas segmentes) : chaque modele clas
 ### Comparaison des modeles (classification par pas, agregation sujet)
 
 ![Comparaison Balanced Accuracy par modele](images/step_subject_barplot_balanced_acc.png)
-
+![Modèle de pas PD vs CO](images/step_zones_pd_co.png)
+ 
 *Le HybridCNN domine tous les modeles avec une faible variance inter-folds.*
 
-### Progression des performances (pas-level → agregation sujet)
+### Progression des performances (pas-level → agregation sujet) (pas besoin)
 
 | Phase | Meilleur modele | Balanced Acc | ROC-AUC |
 |---|---|---|---|
@@ -68,19 +69,19 @@ L'analyse opere au **niveau du pas** (60 439 pas segmentes) : chaque modele clas
 | Phase 2 — CNN1D + features enrichies | CNN1D | 0.66 | 0.75 |
 | **Phase 3 — HybridCNN + capteurs** | **HybridCNN** | **0.77** | **0.87** |
 
-### Performance detaillee des modeles
+### Performance detaillee des modeles (pas besoin)
 
 ![Comparaison des performances par metrique](images/performance_comparison.png)
 
 *Les modeles avec features capteurs (suffixe `_full`) depassent systematiquement la cible de 0.75.*
 
-### Courbes d'entrainement du HybridCNN
+### Courbes d'entrainement du HybridCNN (pas besoin)
 
 ![Courbes d'entrainement HybridCNN](images/hybridcnn_training_curves.png)
 
 *Convergence stable sur les 5 folds grace au dropout agressif (0.3 + 0.5) et a la data augmentation.*
 
-### Vue d'ensemble — Stacking et ensembles
+### Vue d'ensemble — Stacking et ensembles (pas besoin)
 
 ![Comparaison stacking et ensembles](images/stacking_comparison.png)
 
@@ -88,7 +89,7 @@ L'analyse opere au **niveau du pas** (60 439 pas segmentes) : chaque modele clas
 
 ---
 
-## Contributions cles
+## Contributions cles (pas forcément besoin)
 
 | Axe                                                         | Gain                                                           |
 | ----------------------------------------------------------- | -------------------------------------------------------------- |
