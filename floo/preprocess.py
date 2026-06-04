@@ -50,7 +50,7 @@ SENSOR_XY = np.array([
 ])
 
 FPS = 100
-TIME_TO_KEEP = 30 # seconds
+TIME_TO_KEEP = 5 # seconds
 LOG_INTERVAL = 9.99 # seconds
 
 #
@@ -170,7 +170,7 @@ for i, patient in enumerate(demo["ID"]):
                 # standard pre trained models => C = 3
                 heatmap = heatmap[::-1, :] # Reversing the vertical axis
                 heatmap = np.stack([heatmap, blanck_column, blanck_column], axis=0)
-                heatmap = (heatmap).astype(np.uint16) # Converting to uint8 0-255
+                heatmap = (heatmap).astype(np.float16) # Converting to uint8 0-255
                 heatmaps.append(heatmap)
                 
                 i += 1
