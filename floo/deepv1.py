@@ -36,7 +36,7 @@ DATA_PATH = "datasets/gait-in-parkinsons-disease-1.0.0/preprocessed/"
 #   Split
 #
 
-SPLIT_MODE = "study"
+SPLIT_MODE = "stratified"
 HOLDOUT_STUDY = "Ju"
 TRAIN_VALIDATION_RATIO = 0.8
 SEED = 42
@@ -45,13 +45,13 @@ SEED = 42
 #   Training hyperparameters
 #
 
-BATCH_SIZE = 2
+BATCH_SIZE = 4
 NUM_DATALOADER_WORKERS = 4
 PIN_MEMORY = True
 EPOCHS = 20
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0002
 WEIGHT_DECAY = 0.0002
-MAX_GRAD_NORM = 0
+MAX_GRAD_NORM = 1.0
 EARLY_STOP_PATIENCE = 5
 BEST_MIN_DELTA = 1e-3
 LR_SCHEDULER_FACTOR = 0.5
@@ -113,7 +113,7 @@ METADATA_EMBED_DIM = 16
 #
 
 LOG_BATCH_INTERVAL = 2
-LOG_DIR = "./floo/runs/deepv1-3"
+LOG_DIR = "./floo/runs/deepv1-4"
 MODEL_SAVE_PATH = "./floo/models/deepv1/deepv1.pt"
 BEST_MODEL_PATH = "./floo/models/deepv1/deepv1_best.pt"
 
