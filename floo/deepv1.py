@@ -48,21 +48,21 @@ TEST_SEED = 43
 # Stratified k-fold on train+val pool
 USE_CROSS_VALIDATION = True
 N_FOLDS = 5
-CV_LOG_DIR = "./floo/runs/deepv1-cv"
-CV_MODEL_DIR = "./floo/models/deepv1/cv"
+CV_LOG_DIR = "./floo/runs/deepv1-cv-2"
+CV_MODEL_DIR = "./floo/models/deepv1-2"
 
 #
 #   Training hyperparameters
 #
 
-BATCH_SIZE = 4
+BATCH_SIZE = 20
 NUM_DATALOADER_WORKERS = 4
 PIN_MEMORY = True
-EPOCHS = 20
-LEARNING_RATE = 0.0002
+EPOCHS = 100
+LEARNING_RATE = 0.00015
 WEIGHT_DECAY = 0.0002
 MAX_GRAD_NORM = 1.0
-EARLY_STOP_PATIENCE = 5
+EARLY_STOP_PATIENCE = 10
 BEST_MIN_DELTA = 1e-3
 LR_SCHEDULER_FACTOR = 0.5
 LR_SCHEDULER_PATIENCE = 2
@@ -74,7 +74,7 @@ ENABLE_LIVE_EPOCH_INPUT = True
 
 # Must match preprocess.py (TIME_TO_KEEP * FPS)
 GAIT_FPS = 100
-GAIT_DURATION_SEC = 5
+GAIT_DURATION_SEC = 8
 MAX_RAW_FRAMES = GAIT_FPS * GAIT_DURATION_SEC
 
 TEMPORAL_STRIDE = 1
@@ -86,7 +86,7 @@ NUM_TRANSFORMER_LAYERS = 1
 NUM_ATTENTION_HEADS = 4
 TRANSFORMER_FF_DIM = 128
 NUM_GROUPS = 8
-DROPOUT = 0.2
+DROPOUT = 0.25
 
 
 def seq_len_after_stride(
@@ -1171,6 +1171,7 @@ def make_loader_kwargs() -> Dict[str, Any]:
         "batch_size": BATCH_SIZE,
         "num_workers": NUM_DATALOADER_WORKERS,
         "pin_memory": PIN_MEMORY and DEVICE.type == "cuda",
+        "persistent_workers": NUM_DATALOADER_WORKERS > 0,
         "collate_fn": collate_gait_batch,
     }
     if NUM_DATALOADER_WORKERS > 0:
@@ -1431,7 +1432,6 @@ def run_cross_validation(
     if test_metrics:
         print(f"\n{'=' * 60}")
         print("Test set summary (best checkpoint per fold)")
-        print(f"{'=' * 60}")
         print_cv_summary(test_metrics, len(test_metrics))
 
 
@@ -1440,6 +1440,7 @@ def run_cross_validation(
 #
 
 if __name__ == "__main__":
+    print(f"Using device: {DEVICE}")
 
     #
     #   Dataset

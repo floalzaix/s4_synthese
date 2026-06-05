@@ -21,7 +21,6 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch import Tensor
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {DEVICE}")
 
 #
 #   Constants
@@ -1133,6 +1132,7 @@ def make_loader_kwargs() -> Dict[str, Any]:
         "batch_size": BATCH_SIZE,
         "num_workers": NUM_DATALOADER_WORKERS,
         "pin_memory": PIN_MEMORY and DEVICE.type == "cuda",
+        "persistent_workers": NUM_DATALOADER_WORKERS > 0,
         "collate_fn": collate_gait_batch,
     }
     if NUM_DATALOADER_WORKERS > 0:
@@ -1393,7 +1393,6 @@ def run_cross_validation(
     if test_metrics:
         print(f"\n{'=' * 60}")
         print("Test set summary (best checkpoint per fold)")
-        print(f"{'=' * 60}")
         print_cv_summary(test_metrics, len(test_metrics))
 
 
@@ -1402,6 +1401,7 @@ def run_cross_validation(
 #
 
 if __name__ == "__main__":
+    print(f"Using device: {DEVICE}")
 
     #
     #   Dataset
