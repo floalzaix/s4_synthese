@@ -118,6 +118,9 @@ METADATA_COLS = [
 N_METADATA = len(METADATA_COLS)
 METADATA_EMBED_DIM = 16
 
+# Fuse demographics into the classifier (False = gait heatmaps only)
+USE_METADATA = True
+
 #
 #   Logging and checkpoints
 #
@@ -788,29 +791,36 @@ class DeepV1(nn.Module):
             num_layers=num_layers,
         )
 
-        #
-        #   Demographics branch
-        #
-
-        self.metadata_encoder = nn.Sequential(
-            nn.Linear(n_metadata, metadata_embed_dim),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout),
-        )
+        self.use_metadata = USE_METADATA
 
         #
-        #   Fused classification head
+        #   Demographics branch (optional)
         #
 
-        fused_dim = embed_dim + metadata_embed_dim
+        if self.use_metadata:
+            self.metadata_encoder = nn.Sequential(
+                nn.Linear(n_metadata, metadata_embed_dim),
+                nn.ReLU(inplace=True),
+                nn.Dropout(dropout),
+            )
+            fused_dim = embed_dim + metadata_embed_dim
+        else:
+            self.metadata_encoder = None
+            fused_dim = embed_dim
+
+        #
+        #   Classification head
+        #
+
         self.classifier = nn.Sequential(
             nn.LayerNorm(fused_dim),
             nn.Dropout(dropout),
             nn.Linear(fused_dim, 1),
         )
 
+        meta_status = "on" if self.use_metadata else "off"
         print(
-            f"DeepV1 initialized ! "
+            f"DeepV1 initialized ! metadata={meta_status}, "
             f"max_seq_len={max_seq_len} (stride={temporal_stride})"
         )
 
@@ -844,8 +854,13 @@ class DeepV1(nn.Module):
 
         # Global average pooling over time
         gait_features = encoded.mean(dim=1)
-        meta_features = self.metadata_encoder(metadata)
-        fused = torch.cat([gait_features, meta_features], dim=1)
+
+        if self.use_metadata:
+            meta_features = self.metadata_encoder(metadata) # type: ignore
+            fused = torch.cat([gait_features, meta_features], dim=1)
+        else:
+            fused = gait_features
+
         logits = self.classifier(fused).squeeze(-1)
         return logits
 
@@ -1185,10 +1200,15 @@ def build_test_dataloader(
     train_idx_for_meta: List[int],
 ) -> DataLoader:
     """
-        Test loader — metadata z-score fitted on train indices only.
+        Test loader — metadata z-score fitted on train indices only
+        when USE_METADATA is enabled.
     """
-    meta_mean, meta_std = fit_metadata_stats(dataset, train_idx_for_meta)
-    dataset.set_metadata_normalization(meta_mean, meta_std)
+    if USE_METADATA:
+        meta_mean, meta_std = fit_metadata_stats(
+            dataset,
+            train_idx_for_meta,
+        )
+        dataset.set_metadata_normalization(meta_mean, meta_std)
 
     return DataLoader(
         Subset(dataset, test_idx),
@@ -1241,12 +1261,13 @@ def build_fold_dataloaders(
     """
         Metadata z-score, subsets and DataLoaders for one fold.
     """
-    meta_mean, meta_std = fit_metadata_stats(dataset, train_idx)
-    dataset.set_metadata_normalization(meta_mean, meta_std)
-    print(
-        "Metadata z-score (train fold): "
-        f"{dict(zip(METADATA_COLS, meta_mean.tolist()))}"
-    )
+    if USE_METADATA:
+        meta_mean, meta_std = fit_metadata_stats(dataset, train_idx)
+        dataset.set_metadata_normalization(meta_mean, meta_std)
+        print(
+            "Metadata z-score (train fold): "
+            f"{dict(zip(METADATA_COLS, meta_mean.tolist()))}"
+        )
 
     train_labels = [
         int(dataset.metadata.iloc[i]["Group"]) # type: ignore
@@ -1468,6 +1489,10 @@ if __name__ == "__main__":
     print(
         f"Sequence tokens per patient: ~{MAX_SEQ_LEN} "
         f"(raw={MAX_RAW_FRAMES}, stride={TEMPORAL_STRIDE})"
+    )
+    print(
+        f"Metadata branch: "
+        f"{'enabled' if USE_METADATA else 'disabled (gait only)'}"
     )
 
     #

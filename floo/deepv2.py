@@ -111,6 +111,9 @@ METADATA_COLS = [
 N_METADATA = len(METADATA_COLS)
 METADATA_EMBED_DIM = 16
 
+# Fuse demographics into the classifier (False = gait heatmaps only)
+USE_METADATA = False
+
 #
 #   Logging and checkpoints
 #
@@ -753,6 +756,7 @@ class DeepV2(nn.Module):
         super().__init__()
 
         self.max_seq_depth = max_seq_depth
+        self.use_metadata = USE_METADATA
 
         #
         #   3D volume encoder
@@ -761,29 +765,35 @@ class DeepV2(nn.Module):
         self.volume_encoder = VolumeEncoder3D(feature_dim, num_groups)
 
         #
-        #   Demographics branch
+        #   Demographics branch (optional)
         #
 
-        self.metadata_encoder = nn.Sequential(
-            nn.Linear(n_metadata, metadata_embed_dim),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout),
-        )
+        if self.use_metadata:
+            self.metadata_encoder = nn.Sequential(
+                nn.Linear(n_metadata, metadata_embed_dim),
+                nn.ReLU(inplace=True),
+                nn.Dropout(dropout),
+            )
+            fused_dim = feature_dim + metadata_embed_dim
+        else:
+            self.metadata_encoder = None
+            fused_dim = feature_dim
 
         #
-        #   Fused classification head
+        #   Classification head
         #
 
-        fused_dim = feature_dim + metadata_embed_dim
         self.classifier = nn.Sequential(
             nn.LayerNorm(fused_dim),
             nn.Dropout(dropout),
             nn.Linear(fused_dim, 1),
         )
 
+        meta_status = "on" if self.use_metadata else "off"
         print(
-            f"DeepV2 initialized ! "
-            f"max_seq_depth={max_seq_depth} (stride={TEMPORAL_STRIDE})"
+            f"DeepV2 initialized ! metadata={meta_status}, "
+            f"max_seq_depth={max_seq_depth} "
+            f"(stride={TEMPORAL_STRIDE})"
         )
 
     #
@@ -806,8 +816,13 @@ class DeepV2(nn.Module):
         x = heatmap.permute(0, 2, 1, 3, 4) # (B, 1, T, H, W) for Conv3d
 
         gait_features = self.volume_encoder(x)
-        meta_features = self.metadata_encoder(metadata)
-        fused = torch.cat([gait_features, meta_features], dim=1)
+
+        if self.use_metadata:
+            meta_features = self.metadata_encoder(metadata) # type: ignore
+            fused = torch.cat([gait_features, meta_features], dim=1)
+        else:
+            fused = gait_features
+
         logits = self.classifier(fused).squeeze(-1)
         return logits
 
