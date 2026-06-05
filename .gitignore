@@ -20,6 +20,3 @@ __pycache__/
 *.so
 *.o
 *.class
-
-# runs
-**/runs/
