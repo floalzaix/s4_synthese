@@ -47,8 +47,8 @@ TEST_SEED = 43
 # Stratified k-fold on train+val pool (~158 patients -> ~32 per fold)
 USE_CROSS_VALIDATION = True
 N_FOLDS = 5
-CV_LOG_DIR = "./floo/runs/deepv2-cv"
-CV_MODEL_DIR = "./floo/models/deepv2/cv"
+CV_LOG_DIR = "./floo/runs/deepv2-cv-1"
+CV_MODEL_DIR = "./floo/models/deepv2/cv-1"
 
 #
 #   Training hyperparameters
@@ -57,11 +57,11 @@ CV_MODEL_DIR = "./floo/models/deepv2/cv"
 BATCH_SIZE = 10
 NUM_DATALOADER_WORKERS = 4
 PIN_MEMORY = True
-EPOCHS = 20 
-LEARNING_RATE = 0.001
+EPOCHS = 200
+LEARNING_RATE = 0.0005
 WEIGHT_DECAY = 0.0001
 MAX_GRAD_NORM = 1.0
-EARLY_STOP_PATIENCE = 7
+EARLY_STOP_PATIENCE = 20
 BEST_MIN_DELTA = 1e-3
 LR_SCHEDULER_FACTOR = 0.5
 LR_SCHEDULER_PATIENCE = 2
@@ -73,14 +73,14 @@ ENABLE_LIVE_EPOCH_INPUT = True
 
 # Must match preprocess.py (TIME_TO_KEEP * FPS)
 GAIT_FPS = 100
-GAIT_DURATION_SEC = 5
+GAIT_DURATION_SEC = 7
 MAX_RAW_FRAMES = GAIT_FPS * GAIT_DURATION_SEC
 
-TEMPORAL_STRIDE = 10
+TEMPORAL_STRIDE = 4
 
 FEATURE_DIM = 64
 NUM_GROUPS = 8
-DROPOUT = 0.2
+DROPOUT = 0.25
 
 
 def seq_len_after_stride(
