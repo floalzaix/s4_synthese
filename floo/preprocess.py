@@ -20,15 +20,15 @@ OUTPUT_PATH = "datasets/gait-in-parkinsons-disease-1.0.0/preprocessed/"
 
 # TODO: Determine which size is the most appropriate
 # Often used sizes are 224x224 for pretrained models
-HM_W = 224
-HM_H = 224
+HM_W = 64
+HM_H = 64
 
 # TODO: See if we keep only the patient with _01 at the end or _02 for now no just keeping the _01
 
 # The padding around the footprints and the radius of the points
 # TODO : Determine the best padding and radius
-HEATMAP_PADDING = 12 * 224 / 64 # Because it the 11 is from the original 64x64 heatmap
-POINT_RADIUS = 8.5 * 224 / 64 # Because it the 9 is from the original 64x64 heatmap
+HEATMAP_PADDING = 12 * 64 / 64 # Because it the 11 is from the original 64x64 heatmap
+POINT_RADIUS = 8.5 * 64 / 64 # Because it the 9 is from the original 64x64 heatmap
 
 SENSOR_XY = np.array([
     [-500, -800],
@@ -50,8 +50,9 @@ SENSOR_XY = np.array([
 ])
 
 FPS = 100
-TIME_TO_KEEP = 5 # seconds
+TIME_TO_KEEP = 15 # seconds
 LOG_INTERVAL = 9.99 # seconds
+SPEED_REF = 1.0 # m/sec
 
 #
 #   Cleaning the metadata
@@ -138,11 +139,13 @@ for i, patient in enumerate(demo["ID"]):
             n = 0 # Number of logs printed
             i = 0 # Index of the heatmap
             weight = demo[demo["ID"] == patient]["Weight (kg)"].values[0]
-            for line in file:
+            speed = demo[demo["ID"] == patient]["Speed_01 (m/sec)"].values[0]
+            n_frames_to_keep = int(TIME_TO_KEEP * FPS * (SPEED_REF / speed))
+            n_frames_to_keep = max(1, n_frames_to_keep)
 
-                # Keeping the heatmaps for the last TIME_TO_KEEP seconds                
-                if len(heatmaps) >= TIME_TO_KEEP * FPS:
-                    break
+            all_forces: Any = []
+            right_heel: Any = []
+            for line in file:
 
                 splits = line.strip("\n").split("\t")
                 if len(splits) != 19:
@@ -150,10 +153,46 @@ for i, patient in enumerate(demo["ID"]):
 
                 forces = np.array([float(x) for x in splits[1:17]], dtype=np.float32)
 
-                # TODO: Normalise with weight of the patient
-                # Normalizing the with the weight of the patient (N/kg)
+                # Normalizing with the weight of the patient (N/kg)
                 forces = forces / weight
 
+                all_forces.append(forces)
+                right_heel.append(float(forces[8]))
+
+                if len(all_forces) >= (n_frames_to_keep + 5 * FPS):
+                    break
+
+            if len(all_forces) == 0:
+                print(f"No data found for patient {patient} !")
+                continue
+
+            peak_idx = 0
+            max_rh = float(np.max(np.array(right_heel, dtype=np.float32)))
+            threshold = 0.15 * max_rh
+
+            in_contact = False
+            contact_peak_idx = 0
+            contact_peak_val = 0.0
+            for k, val in enumerate(right_heel):
+                if (not in_contact) and (val > threshold):
+                    in_contact = True
+                    contact_peak_idx = k
+                    contact_peak_val = val
+                    continue
+
+                if in_contact and (val > contact_peak_val):
+                    contact_peak_idx = k
+                    contact_peak_val = val
+                    continue
+
+                if in_contact and (val <= threshold):
+                    peak_idx = contact_peak_idx
+                    break
+
+            if in_contact and peak_idx == 0:
+                peak_idx = contact_peak_idx
+
+            for forces in all_forces[peak_idx : peak_idx + n_frames_to_keep]:
                 # Creating the heatmap ass an image with size (W, H)
                 rbf = Rbf(
                     x, y,
@@ -172,7 +211,7 @@ for i, patient in enumerate(demo["ID"]):
                 heatmap = np.stack([heatmap, blanck_column, blanck_column], axis=0)
                 heatmap = (heatmap).astype(np.float16) # Converting to uint8 0-255
                 heatmaps.append(heatmap)
-                
+
                 i += 1
 
                 if time.time() - time_stamp >= LOG_INTERVAL * n:

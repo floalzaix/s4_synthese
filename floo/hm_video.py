@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 #   Constants
 #
 
-PATH = "datasets/gait-in-parkinsons-disease-1.0.0/preprocessed/JuCo05_hm.npz"
+PATH = "datasets/gait-in-parkinsons-disease-1.0.0/preprocessed/GaPt05_hm.npz"
 OUTPUT_PATH = "test.mp4"
 
 FPS = 100
