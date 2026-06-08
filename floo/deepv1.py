@@ -47,22 +47,22 @@ TEST_SEED = 43
 
 # Stratified k-fold on train+val pool
 USE_CROSS_VALIDATION = True
-N_FOLDS = 5
-CV_LOG_DIR = "./floo/runs/deepv1-cv-2"
-CV_MODEL_DIR = "./floo/models/deepv1-2"
+N_FOLDS = 4
+CV_LOG_DIR = "./floo/runs/deepv1-cv-4"
+CV_MODEL_DIR = "./floo/models/deepv1-4"
 
 #
 #   Training hyperparameters
 #
 
-BATCH_SIZE = 20
+BATCH_SIZE = 15
 NUM_DATALOADER_WORKERS = 4
 PIN_MEMORY = True
-EPOCHS = 100
-LEARNING_RATE = 0.00015
+EPOCHS = 200
+LEARNING_RATE = 0.0001
 WEIGHT_DECAY = 0.0002
 MAX_GRAD_NORM = 1.0
-EARLY_STOP_PATIENCE = 10
+EARLY_STOP_PATIENCE = 30
 BEST_MIN_DELTA = 1e-3
 LR_SCHEDULER_FACTOR = 0.5
 LR_SCHEDULER_PATIENCE = 2
@@ -77,7 +77,7 @@ GAIT_FPS = 100
 GAIT_DURATION_SEC = 8
 MAX_RAW_FRAMES = GAIT_FPS * GAIT_DURATION_SEC
 
-TEMPORAL_STRIDE = 1
+TEMPORAL_STRIDE = 2
 
 # Frames per CNN forward chunk (limits peak VRAM on long sequences)
 FRAME_CNN_CHUNK_SIZE = 32
@@ -86,7 +86,7 @@ NUM_TRANSFORMER_LAYERS = 1
 NUM_ATTENTION_HEADS = 4
 TRANSFORMER_FF_DIM = 128
 NUM_GROUPS = 8
-DROPOUT = 0.25
+DROPOUT = 0.35
 
 
 def seq_len_after_stride(
@@ -109,14 +109,14 @@ MAX_SEQ_LEN = seq_len_after_stride(MAX_RAW_FRAMES, TEMPORAL_STRIDE)
 #
 
 METADATA_COLS = [
-    "Gender",
-    "Age",
-    "Height",
-    "Weight (kg)",
+    # "Gender",
+    # "Age",
+    # "Height",
+    # "Weight (kg)",
     "Speed_01 (m/sec)",
 ]
 N_METADATA = len(METADATA_COLS)
-METADATA_EMBED_DIM = 16
+METADATA_EMBED_DIM = 4
 
 # Fuse demographics into the classifier (False = gait heatmaps only)
 USE_METADATA = True
